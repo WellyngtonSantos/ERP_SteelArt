@@ -196,13 +196,13 @@ function ProjectCard({
         <button
           onClick={onMoveLeft}
           disabled={!canMoveLeft || updating}
-          className="btn-secondary text-xs px-2 py-1 flex items-center gap-1 disabled:opacity-30"
+          className="btn-secondary text-xs px-3 py-1.5 min-h-[36px] flex items-center gap-1 disabled:opacity-30"
         >
-          <ChevronLeft className="w-3 h-3" />
+          <ChevronLeft className="w-4 h-4" />
         </button>
         <button
           onClick={() => setExpanded(!expanded)}
-          className="btn-secondary text-xs px-3 py-1 flex-1 flex items-center justify-center gap-1"
+          className="btn-secondary text-xs px-3 py-1.5 min-h-[36px] flex-1 flex items-center justify-center gap-1"
         >
           {expanded ? (
             <>
@@ -217,9 +217,9 @@ function ProjectCard({
         <button
           onClick={onMoveRight}
           disabled={!canMoveRight || updating}
-          className="btn-secondary text-xs px-2 py-1 flex items-center gap-1 disabled:opacity-30"
+          className="btn-secondary text-xs px-3 py-1.5 min-h-[36px] flex items-center gap-1 disabled:opacity-30"
         >
-          <ChevronRight className="w-3 h-3" />
+          <ChevronRight className="w-4 h-4" />
         </button>
       </div>
 
@@ -243,7 +243,7 @@ function ProjectCard({
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <input
                 type="range"
                 min="0"
@@ -254,7 +254,7 @@ function ProjectCard({
                   setLocalProgress(parseInt(e.target.value))
                   setEditingProgress(true)
                 }}
-                className="flex-1 accent-amarelo"
+                className="flex-1 min-w-0 accent-amarelo"
               />
               <span className={`text-sm font-bold w-10 text-right ${getProgressTextColor(localProgress)}`}>
                 {localProgress}%
@@ -263,7 +263,7 @@ function ProjectCard({
           </div>
 
           {/* Dates */}
-          <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div>
               <span className="text-gray-500 flex items-center gap-1">
                 <Clock className="w-3 h-3" /> Inicio
@@ -471,7 +471,7 @@ export default function ProducaoPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         {COLUMNS.map((col) => (
           <div key={col.key} className="card p-4">
             <div className="flex items-center gap-2">
@@ -510,7 +510,7 @@ export default function ProducaoPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {COLUMNS.map((col) => {
             const colProjects = columnProjects[col.key] || []
             return (

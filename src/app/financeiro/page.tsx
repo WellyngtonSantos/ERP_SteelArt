@@ -340,10 +340,10 @@ export default function FinanceiroPage() {
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-grafite-700 rounded w-64" />
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-28 bg-grafite-800 rounded-xl" />
             ))}
@@ -355,7 +355,7 @@ export default function FinanceiroPage() {
   }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       <h1 className="text-2xl font-bold text-gray-100">Financeiro</h1>
 
       {error && (
@@ -366,7 +366,7 @@ export default function FinanceiroPage() {
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card-highlight">
           <p className="text-sm text-gray-400">Total a Receber</p>
           <p className="text-2xl font-bold text-green-400 mt-1">
@@ -388,26 +388,28 @@ export default function FinanceiroPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-grafite-900 p-1 rounded-lg w-fit">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => { setActiveTab(tab.key); setStatusFilter('') }}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === tab.key
-                ? 'bg-amarelo text-grafite-950'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-grafite-700'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+        <div className="flex gap-1 bg-grafite-900 p-1 rounded-lg w-fit min-w-max">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => { setActiveTab(tab.key); setStatusFilter('') }}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                activeTab === tab.key
+                  ? 'bg-amarelo text-grafite-950'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-grafite-700'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Contas a Receber */}
       {activeTab === 'receber' && (
         <div className="card">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <h2 className="text-lg font-semibold text-gray-100">Contas a Receber</h2>
             <div className="flex items-center gap-3">
               <select
@@ -420,12 +422,13 @@ export default function FinanceiroPage() {
                 <option value="PAGO">Pago</option>
                 <option value="ATRASADO">Atrasado</option>
               </select>
-              <button onClick={() => openNewEntry('RECEITA')} className="btn-primary text-sm">
+              <button onClick={() => openNewEntry('RECEITA')} className="btn-primary text-sm p-2 sm:px-4 sm:py-2">
                 Novo Lancamento
               </button>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
@@ -470,7 +473,7 @@ export default function FinanceiroPage() {
                         {entry.status !== 'PAGO' && (
                           <button
                             onClick={() => markAsPaid(entry)}
-                            className="text-xs btn-secondary py-1 px-2"
+                            className="text-xs btn-secondary p-2"
                           >
                             Marcar como Pago
                           </button>
@@ -482,13 +485,46 @@ export default function FinanceiroPage() {
               </tbody>
             </table>
           </div>
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-3">
+            {filteredReceitas.length === 0 ? (
+              <p className="py-8 text-center text-gray-500">Nenhum lancamento encontrado.</p>
+            ) : (
+              filteredReceitas.map((entry) => (
+                <div key={entry.id} className="bg-grafite-800 rounded-lg p-4 space-y-2">
+                  <div className="flex items-start justify-between">
+                    <p className="font-medium text-gray-100">{entry.description}</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ml-2 ${STATUS_COLORS[entry.status]}`}>
+                      {STATUS_LABELS[entry.status]}
+                    </span>
+                  </div>
+                  <p className="text-lg font-bold text-green-400">{formatCurrency(entry.amount)}</p>
+                  <div className="flex items-center justify-between text-sm text-gray-400">
+                    <span>Venc: {new Date(entry.dueDate).toLocaleDateString('pt-BR')}</span>
+                    <span>{entry.category}</span>
+                  </div>
+                  {entry.paidDate && (
+                    <p className="text-sm text-gray-400">Pago em: {new Date(entry.paidDate).toLocaleDateString('pt-BR')}</p>
+                  )}
+                  {entry.status !== 'PAGO' && (
+                    <button
+                      onClick={() => markAsPaid(entry)}
+                      className="btn-secondary text-sm w-full p-2 mt-2"
+                    >
+                      Marcar como Pago
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
 
       {/* Contas a Pagar */}
       {activeTab === 'pagar' && (
         <div className="card">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <h2 className="text-lg font-semibold text-gray-100">Contas a Pagar</h2>
             <div className="flex items-center gap-3">
               <select
@@ -501,12 +537,13 @@ export default function FinanceiroPage() {
                 <option value="PAGO">Pago</option>
                 <option value="ATRASADO">Atrasado</option>
               </select>
-              <button onClick={() => openNewEntry('DESPESA')} className="btn-primary text-sm">
+              <button onClick={() => openNewEntry('DESPESA')} className="btn-primary text-sm p-2 sm:px-4 sm:py-2">
                 Novo Lancamento
               </button>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
@@ -551,7 +588,7 @@ export default function FinanceiroPage() {
                         {entry.status !== 'PAGO' && (
                           <button
                             onClick={() => markAsPaid(entry)}
-                            className="text-xs btn-secondary py-1 px-2"
+                            className="text-xs btn-secondary p-2"
                           >
                             Marcar como Pago
                           </button>
@@ -563,6 +600,39 @@ export default function FinanceiroPage() {
               </tbody>
             </table>
           </div>
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-3">
+            {filteredDespesas.length === 0 ? (
+              <p className="py-8 text-center text-gray-500">Nenhum lancamento encontrado.</p>
+            ) : (
+              filteredDespesas.map((entry) => (
+                <div key={entry.id} className="bg-grafite-800 rounded-lg p-4 space-y-2">
+                  <div className="flex items-start justify-between">
+                    <p className="font-medium text-gray-100">{entry.description}</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ml-2 ${STATUS_COLORS[entry.status]}`}>
+                      {STATUS_LABELS[entry.status]}
+                    </span>
+                  </div>
+                  <p className="text-lg font-bold text-red-400">{formatCurrency(entry.amount)}</p>
+                  <div className="flex items-center justify-between text-sm text-gray-400">
+                    <span>Venc: {new Date(entry.dueDate).toLocaleDateString('pt-BR')}</span>
+                    <span>{entry.category}</span>
+                  </div>
+                  {entry.paidDate && (
+                    <p className="text-sm text-gray-400">Pago em: {new Date(entry.paidDate).toLocaleDateString('pt-BR')}</p>
+                  )}
+                  {entry.status !== 'PAGO' && (
+                    <button
+                      onClick={() => markAsPaid(entry)}
+                      className="btn-secondary text-sm w-full p-2 mt-2"
+                    >
+                      Marcar como Pago
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
 
@@ -571,11 +641,12 @@ export default function FinanceiroPage() {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-100">Custos Fixos</h2>
-            <button onClick={openAddCost} className="btn-primary text-sm">
+            <button onClick={openAddCost} className="btn-primary text-sm p-2 sm:px-4 sm:py-2">
               Novo Custo Fixo
             </button>
           </div>
-          <div className="overflow-x-auto">
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
@@ -617,7 +688,7 @@ export default function FinanceiroPage() {
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => openEditCost(cost)}
-                            className="text-amarelo hover:text-amarelo-light transition-colors"
+                            className="p-2 text-amarelo hover:text-amarelo-light transition-colors"
                             title="Editar"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -626,7 +697,7 @@ export default function FinanceiroPage() {
                           </button>
                           <button
                             onClick={() => deleteCost(cost.id)}
-                            className="text-red-500 hover:text-red-400 transition-colors"
+                            className="p-2 text-red-500 hover:text-red-400 transition-colors"
                             title="Excluir"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -654,6 +725,71 @@ export default function FinanceiroPage() {
               </tbody>
             </table>
           </div>
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-3">
+            {fixedCosts.length === 0 ? (
+              <p className="py-8 text-center text-gray-500">Nenhum custo fixo cadastrado.</p>
+            ) : (
+              <>
+                {fixedCosts.map((cost) => (
+                  <div key={cost.id} className="bg-grafite-800 rounded-lg p-4 space-y-2">
+                    <div className="flex items-start justify-between">
+                      <p className="font-medium text-gray-100">{cost.name}</p>
+                      <span className="text-xs text-gray-400 ml-2">{cost.category}</span>
+                    </div>
+                    <p className="text-lg font-bold text-gray-100">{formatCurrency(cost.amount)}</p>
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-400">Ativo:</span>
+                        <button
+                          onClick={() => toggleCostActive(cost)}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                            cost.active ? 'bg-amarelo' : 'bg-grafite-600'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                              cost.active ? 'translate-x-5' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openEditCost(cost)}
+                          className="p-2 text-amarelo hover:text-amarelo-light transition-colors"
+                          title="Editar"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => deleteCost(cost.id)}
+                          className="p-2 text-red-500 hover:text-red-400 transition-colors"
+                          title="Excluir"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="bg-grafite-900 rounded-lg p-4 flex items-center justify-between font-semibold">
+                  <span className="text-gray-300">TOTAL MENSAL</span>
+                  <span className="text-amarelo">
+                    {formatCurrency(
+                      fixedCosts
+                        .filter((c) => c.active)
+                        .reduce((s, c) => s + c.amount, 0)
+                    )}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -662,11 +798,12 @@ export default function FinanceiroPage() {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-100">Configuracao de Impostos</h2>
-            <button onClick={openAddTax} className="btn-primary text-sm">
+            <button onClick={openAddTax} className="btn-primary text-sm p-2 sm:px-4 sm:py-2">
               Novo Imposto
             </button>
           </div>
-          <div className="overflow-x-auto">
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
@@ -716,7 +853,7 @@ export default function FinanceiroPage() {
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => openEditTax(tax)}
-                            className="text-amarelo hover:text-amarelo-light transition-colors"
+                            className="p-2 text-amarelo hover:text-amarelo-light transition-colors"
                             title="Editar"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -725,7 +862,7 @@ export default function FinanceiroPage() {
                           </button>
                           <button
                             onClick={() => deleteTax(tax.id)}
-                            className="text-red-500 hover:text-red-400 transition-colors"
+                            className="p-2 text-red-500 hover:text-red-400 transition-colors"
                             title="Excluir"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -739,6 +876,64 @@ export default function FinanceiroPage() {
                 )}
               </tbody>
             </table>
+          </div>
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-3">
+            {taxes.length === 0 ? (
+              <p className="py-8 text-center text-gray-500">Nenhum imposto configurado.</p>
+            ) : (
+              taxes.map((tax) => (
+                <div key={tax.id} className="bg-grafite-800 rounded-lg p-4 space-y-2">
+                  <div className="flex items-start justify-between">
+                    <p className="font-medium text-gray-100">{tax.name}</p>
+                    <span className="bg-grafite-700 px-2 py-0.5 rounded text-xs ml-2">
+                      {tax.type}
+                    </span>
+                  </div>
+                  <p className="text-lg font-bold text-gray-100">{tax.rate.toFixed(2)}%</p>
+                  <p className="text-sm text-gray-400">
+                    Aplica-se a: {APPLIES_TO_OPTIONS.find((o) => o.value === tax.appliesTo)?.label || tax.appliesTo}
+                  </p>
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-400">Ativo:</span>
+                      <button
+                        onClick={() => toggleTaxActive(tax)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                          tax.active ? 'bg-amarelo' : 'bg-grafite-600'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                            tax.active ? 'translate-x-5' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openEditTax(tax)}
+                        className="p-2 text-amarelo hover:text-amarelo-light transition-colors"
+                        title="Editar"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => deleteTax(tax.id)}
+                        className="p-2 text-red-500 hover:text-red-400 transition-colors"
+                        title="Excluir"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -894,7 +1089,7 @@ export default function FinanceiroPage() {
                   placeholder="Ex: ISS Servicos"
                 />
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="label-field">Tipo</label>
                   <select

@@ -177,7 +177,7 @@ export default function RHPage() {
       <div className="p-8">
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-grafite-700 rounded w-64" />
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-28 bg-grafite-800 rounded-xl" />
             ))}
@@ -189,14 +189,15 @@ export default function RHPage() {
   }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-100">RH & Equipe</h1>
-        <button onClick={openAddModal} className="btn-primary flex items-center gap-2">
+        <button onClick={openAddModal} className="btn-primary flex items-center gap-2 p-2 sm:px-4 sm:py-2">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Novo Funcionario
+          <span className="hidden sm:inline">Novo Funcionario</span>
+          <span className="sm:hidden">Novo</span>
         </button>
       </div>
 
@@ -208,7 +209,7 @@ export default function RHPage() {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card-highlight">
           <p className="text-sm text-gray-400">Total Funcionarios</p>
           <p className="text-2xl font-bold text-amarelo mt-1">{totalEmployees}</p>
@@ -230,7 +231,9 @@ export default function RHPage() {
       {/* Employees Table */}
       <div className="card">
         <h2 className="text-lg font-semibold text-gray-100 mb-4">Funcionarios</h2>
-        <div className="overflow-x-auto">
+
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
@@ -296,7 +299,7 @@ export default function RHPage() {
                         <td className="px-4 py-3 text-center">
                           <button
                             onClick={() => openEditModal(emp)}
-                            className="text-amarelo hover:text-amarelo-light transition-colors"
+                            className="p-2 text-amarelo hover:text-amarelo-light transition-colors"
                             title="Editar"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -312,7 +315,7 @@ export default function RHPage() {
                           <td colSpan={7} className="px-4 py-4 bg-grafite-900/50">
                             <div className="space-y-4">
                               {/* Monthly Summary */}
-                              <div className="grid grid-cols-3 gap-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div className="bg-grafite-800 rounded-lg p-3">
                                   <p className="text-xs text-gray-400">Salario Bruto</p>
                                   <p className="text-lg font-semibold text-gray-200">
@@ -347,10 +350,10 @@ export default function RHPage() {
                                     {emp.deductions.map((ded) => (
                                       <div
                                         key={ded.id}
-                                        className="flex items-center justify-between bg-grafite-800 rounded px-3 py-2 text-sm"
+                                        className="flex items-center justify-between bg-grafite-800 rounded px-3 py-3 text-sm"
                                       >
                                         <div className="flex items-center gap-3">
-                                          <span className="text-xs bg-grafite-700 px-2 py-0.5 rounded text-gray-300">
+                                          <span className="text-xs bg-grafite-700 px-2 py-1 rounded text-gray-300">
                                             {getDeductionTypeLabel(ded.type)}
                                           </span>
                                           <span className="text-gray-400">
@@ -376,7 +379,7 @@ export default function RHPage() {
                                 <h4 className="text-sm font-medium text-gray-300 mb-3">
                                   Lancar Vale
                                 </h4>
-                                <div className="flex items-end gap-3">
+                                <div className="flex flex-col sm:flex-row sm:items-end gap-3">
                                   <div className="flex-1">
                                     <label className="label-field">Tipo</label>
                                     <select
@@ -393,7 +396,7 @@ export default function RHPage() {
                                       ))}
                                     </select>
                                   </div>
-                                  <div className="w-36">
+                                  <div className="sm:w-36">
                                     <label className="label-field">Valor (R$)</label>
                                     <input
                                       type="number"
@@ -427,7 +430,7 @@ export default function RHPage() {
                                   <button
                                     onClick={() => launchVale(emp.id)}
                                     disabled={savingVale}
-                                    className="btn-primary whitespace-nowrap"
+                                    className="btn-primary whitespace-nowrap p-2"
                                   >
                                     {savingVale ? 'Salvando...' : 'Lancar'}
                                   </button>
@@ -444,11 +447,213 @@ export default function RHPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden space-y-3">
+          {employees.length === 0 ? (
+            <p className="px-4 py-8 text-center text-gray-500">
+              Nenhum funcionario cadastrado.
+            </p>
+          ) : (
+            employees.map((emp) => {
+              const hourlyRate = emp.monthlyCost / 220
+              const isExpanded = expandedId === emp.id
+              const totalDeductions = getDeductionTotal(emp.deductions)
+              const netPayment = emp.monthlyCost - totalDeductions
+
+              return (
+                <div key={emp.id} className="bg-grafite-800 rounded-lg overflow-hidden">
+                  {/* Card Header */}
+                  <div
+                    className="p-4 cursor-pointer"
+                    onClick={() => toggleExpand(emp.id)}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <svg
+                          className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                        <span className="font-medium text-gray-100">{emp.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full ${
+                            emp.active
+                              ? 'bg-green-900/50 text-green-400'
+                              : 'bg-red-900/50 text-red-400'
+                          }`}
+                        >
+                          {emp.active ? 'Ativo' : 'Inativo'}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openEditModal(emp)
+                          }}
+                          className="p-2 text-amarelo hover:text-amarelo-light transition-colors"
+                          title="Editar"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-400 mb-2">{emp.role}</p>
+                    <div className="flex items-center justify-between text-sm">
+                      <div>
+                        <span className="text-gray-500">Salario: </span>
+                        <span className="text-gray-200">{formatCurrency(emp.monthlyCost)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Valor/Hora: </span>
+                        <span className="text-gray-400">{formatCurrency(hourlyRate)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expanded Details */}
+                  {isExpanded && (
+                    <div className="border-t border-grafite-700 p-4 space-y-4 bg-grafite-900/50">
+                      {/* Monthly Summary */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="bg-grafite-800 rounded-lg p-3">
+                          <p className="text-xs text-gray-400">Salario Bruto</p>
+                          <p className="text-lg font-semibold text-gray-200">
+                            {formatCurrency(emp.monthlyCost)}
+                          </p>
+                        </div>
+                        <div className="bg-grafite-800 rounded-lg p-3">
+                          <p className="text-xs text-gray-400">Total Deducoes</p>
+                          <p className="text-lg font-semibold text-red-400">
+                            - {formatCurrency(totalDeductions)}
+                          </p>
+                        </div>
+                        <div className="bg-grafite-800 rounded-lg p-3">
+                          <p className="text-xs text-gray-400">Liquido a Pagar</p>
+                          <p className="text-lg font-semibold text-green-400">
+                            {formatCurrency(netPayment)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Deductions List */}
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-300 mb-2">
+                          Deducoes do Mes Atual
+                        </h4>
+                        {emp.deductions.length === 0 ? (
+                          <p className="text-sm text-gray-500 italic">
+                            Nenhuma deducao neste mes.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {emp.deductions.map((ded) => (
+                              <div
+                                key={ded.id}
+                                className="flex flex-col gap-1 bg-grafite-800 rounded px-3 py-3 text-sm"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs bg-grafite-700 px-2 py-1 rounded text-gray-300">
+                                    {getDeductionTypeLabel(ded.type)}
+                                  </span>
+                                  <span className="text-red-400 font-medium">
+                                    - {formatCurrency(ded.amount)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-400 text-sm">
+                                    {ded.description || '-'}
+                                  </span>
+                                  <span className="text-gray-500 text-xs">
+                                    {new Date(ded.date).toLocaleDateString('pt-BR')}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Lancar Vale Form */}
+                      <div className="bg-grafite-800 rounded-lg p-4">
+                        <h4 className="text-sm font-medium text-gray-300 mb-3">
+                          Lancar Vale
+                        </h4>
+                        <div className="flex flex-col gap-3">
+                          <div>
+                            <label className="label-field">Tipo</label>
+                            <select
+                              value={valeForm.type}
+                              onChange={(e) =>
+                                setValeForm({ ...valeForm, type: e.target.value })
+                              }
+                              className="select-field w-full"
+                            >
+                              {DEDUCTION_TYPES.map((t) => (
+                                <option key={t.value} value={t.value}>
+                                  {t.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="label-field">Valor (R$)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={valeForm.amount || ''}
+                              onChange={(e) =>
+                                setValeForm({
+                                  ...valeForm,
+                                  amount: parseFloat(e.target.value) || 0,
+                                })
+                              }
+                              className="input-field"
+                              placeholder="0,00"
+                            />
+                          </div>
+                          <div>
+                            <label className="label-field">Descricao</label>
+                            <input
+                              type="text"
+                              value={valeForm.description}
+                              onChange={(e) =>
+                                setValeForm({
+                                  ...valeForm,
+                                  description: e.target.value,
+                                })
+                              }
+                              className="input-field"
+                              placeholder="Opcional"
+                            />
+                          </div>
+                          <button
+                            onClick={() => launchVale(emp.id)}
+                            disabled={savingVale}
+                            className="btn-primary whitespace-nowrap p-2 w-full"
+                          >
+                            {savingVale ? 'Salvando...' : 'Lancar'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
       </div>
 
       {/* Monthly Closing Report */}
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
           <h2 className="text-lg font-semibold text-gray-100">
             Fechamento Mensal
           </h2>
@@ -456,10 +661,12 @@ export default function RHPage() {
             type="month"
             value={closingMonth}
             onChange={(e) => setClosingMonth(e.target.value)}
-            className="input-field w-auto"
+            className="input-field w-full sm:w-auto"
           />
         </div>
-        <div className="overflow-x-auto">
+
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
@@ -526,12 +733,91 @@ export default function RHPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden space-y-3">
+          {activeEmployees.map((emp) => {
+            const totalDed = getDeductionTotal(emp.deductions)
+            const net = emp.monthlyCost - totalDed
+            return (
+              <div key={emp.id} className="bg-grafite-800 rounded-lg p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-gray-100">{emp.name}</span>
+                  <span className="text-sm text-gray-400">{emp.role}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-gray-500">Bruto: </span>
+                    <span className="text-gray-200">{formatCurrency(emp.monthlyCost)}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-gray-500">Beneficios: </span>
+                    <span className="text-gray-400">{formatCurrency(emp.benefits)}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Deducoes: </span>
+                    <span className="text-red-400">
+                      {totalDed > 0 ? `- ${formatCurrency(totalDed)}` : '-'}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-gray-500">Liquido: </span>
+                    <span className="font-semibold text-green-400">{formatCurrency(net)}</span>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+          {activeEmployees.length > 0 && (
+            <div className="bg-grafite-900 rounded-lg p-4 font-semibold">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-300">TOTAL</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <span className="text-gray-500">Bruto: </span>
+                  <span className="text-gray-200">
+                    {formatCurrency(activeEmployees.reduce((s, e) => s + e.monthlyCost, 0))}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-gray-500">Beneficios: </span>
+                  <span className="text-gray-400">
+                    {formatCurrency(activeEmployees.reduce((s, e) => s + e.benefits, 0))}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Deducoes: </span>
+                  <span className="text-red-400">
+                    - {formatCurrency(
+                      activeEmployees.reduce(
+                        (s, e) => s + getDeductionTotal(e.deductions),
+                        0
+                      )
+                    )}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-gray-500">Liquido: </span>
+                  <span className="text-green-400">
+                    {formatCurrency(
+                      activeEmployees.reduce(
+                        (s, e) => s + e.monthlyCost - getDeductionTotal(e.deductions),
+                        0
+                      )
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Add/Edit Employee Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="card w-full max-w-lg mx-4">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="card w-full max-w-lg p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-gray-100 mb-4">
               {editingEmployee ? 'Editar Funcionario' : 'Novo Funcionario'}
             </h2>
@@ -556,7 +842,7 @@ export default function RHPage() {
                   placeholder="Ex: Soldador, Serralheiro"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="label-field">Salario Mensal (R$)</label>
                   <input
@@ -605,17 +891,17 @@ export default function RHPage() {
                 </button>
               </div>
             </div>
-            <div className="flex justify-end gap-3 mt-6">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 mt-6">
               <button
                 onClick={() => setShowModal(false)}
-                className="btn-secondary"
+                className="btn-secondary p-2"
                 disabled={saving}
               >
                 Cancelar
               </button>
               <button
                 onClick={saveEmployee}
-                className="btn-primary"
+                className="btn-primary p-2"
                 disabled={saving}
               >
                 {saving ? 'Salvando...' : 'Salvar'}

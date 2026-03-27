@@ -160,7 +160,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-1 bg-grafite-800 rounded-lg p-1">
+        <div className="flex flex-wrap items-center gap-1 bg-grafite-800 rounded-lg p-1">
           {periodos.map((p) => (
             <button
               key={p.value}
@@ -186,13 +186,13 @@ export default function DashboardPage() {
 
       {/* Stats Cards */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
         </div>
       ) : data ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatsCard
             title="Custo Empresa/Dia"
             value={data.custoEmpresaDia}
@@ -218,11 +218,11 @@ export default function DashboardPage() {
         {loading ? (
           <SkeletonBlock height="h-72" />
         ) : data ? (
-          <div className="card">
+          <div className="card overflow-hidden">
             <h2 className="text-lg font-semibold text-grafite-100 mb-4">
               Resumo DRE
             </h2>
-            <div className="divide-y divide-grafite-800">
+            <div className="divide-y divide-grafite-800 space-y-0">
               <DRELine label="Receita Bruta" value={data.dre.receitaBruta} />
               <DRELine
                 label="Impostos"
@@ -257,11 +257,13 @@ export default function DashboardPage() {
         {loading ? (
           <SkeletonBlock height="h-72" />
         ) : data ? (
-          <div className="card">
+          <div className="card overflow-hidden">
             <h2 className="text-lg font-semibold text-grafite-100 mb-4">
               Fluxo de Caixa
             </h2>
-            <DREChart data={data.fluxoCaixa} />
+            <div className="w-full min-w-0 overflow-x-auto">
+              <DREChart data={data.fluxoCaixa} />
+            </div>
           </div>
         ) : null}
       </div>
