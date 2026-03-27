@@ -6,17 +6,39 @@ export default withAuth(
     const token = req.nextauth.token
     const path = req.nextUrl.pathname
 
-    // Role-based access control
-    if (path === '/' && token?.role === 'OPERADOR') {
-      return NextResponse.redirect(new URL('/producao', req.url))
+    // Admin has access to everything
+    if (token?.role === 'ADMIN') {
+      return NextResponse.next()
     }
 
-    if (path.startsWith('/financeiro') && token?.role !== 'ADMIN') {
+    // /usuarios is admin-only
+    if (path.startsWith('/usuarios')) {
       return NextResponse.redirect(new URL('/', req.url))
     }
 
-    if (path.startsWith('/rh') && !['ADMIN', 'ENGENHEIRO'].includes(token?.role as string)) {
-      return NextResponse.redirect(new URL('/', req.url))
+    // Check page-level permissions from allowedPages
+    const allowedPages: string[] = (() => {
+      try {
+        const raw = token?.allowedPages as string
+        return raw ? JSON.parse(raw) : []
+      } catch {
+        return []
+      }
+    })()
+
+    // If user has allowedPages defined, enforce them
+    if (allowedPages.length > 0) {
+      // Check if current path is allowed
+      const isAllowed = allowedPages.some((allowed) => {
+        if (allowed === '/') return path === '/'
+        return path === allowed || path.startsWith(allowed + '/')
+      })
+
+      if (!isAllowed) {
+        // Redirect to first allowed page, or login if none
+        const firstAllowed = allowedPages[0] || '/'
+        return NextResponse.redirect(new URL(firstAllowed, req.url))
+      }
     }
 
     return NextResponse.next()
@@ -29,5 +51,5 @@ export default withAuth(
 )
 
 export const config = {
-  matcher: ['/((?!login|api/auth|api/seed|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!login|api/auth|api/seed|_next/static|_next/image|favicon.ico|uploads).*)'],
 }

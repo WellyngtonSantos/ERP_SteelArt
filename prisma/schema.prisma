@@ -8,15 +8,16 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      String   @default("VENDEDOR") // ADMIN, VENDEDOR, ENGENHEIRO, OPERADOR
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  budgets   Budget[]
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  password     String
+  role         String   @default("VENDEDOR") // ADMIN, VENDEDOR, ENGENHEIRO, OPERADOR
+  allowedPages String   @default("[]") // JSON array of allowed page paths
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  budgets      Budget[]
 }
 
 model Employee {
