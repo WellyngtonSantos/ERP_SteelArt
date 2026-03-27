@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+.env
+.env.local
+prisma/dev.db
+prisma/dev.db-journal
+public/uploads/products/*
+public/uploads/budgets/*
+public/uploads/template/*
+!public/uploads/**/.gitkeep

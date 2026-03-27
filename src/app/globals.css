@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-grafite-950 text-gray-100;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-grafite-800 rounded-xl border border-grafite-700 p-6 shadow-lg;
+  }
+  .card-highlight {
+    @apply card border-amarelo/30 shadow-amarelo/5;
+  }
+  .btn-primary {
+    @apply bg-amarelo hover:bg-amarelo-dark text-grafite-950 font-semibold px-4 py-2 rounded-lg transition-colors;
+  }
+  .btn-secondary {
+    @apply bg-grafite-700 hover:bg-grafite-600 text-gray-200 px-4 py-2 rounded-lg transition-colors;
+  }
+  .btn-danger {
+    @apply bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors;
+  }
+  .input-field {
+    @apply bg-grafite-900 border border-grafite-600 text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:border-amarelo focus:ring-1 focus:ring-amarelo w-full;
+  }
+  .select-field {
+    @apply bg-grafite-900 border border-grafite-600 text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:border-amarelo;
+  }
+  .label-field {
+    @apply block text-sm font-medium text-gray-400 mb-1;
+  }
+  .table-header {
+    @apply bg-grafite-900 text-gray-400 text-xs uppercase tracking-wider;
+  }
+  .table-row {
+    @apply border-b border-grafite-700 hover:bg-grafite-700/50 transition-colors;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #1a1b1e;
+}
+::-webkit-scrollbar-thumb {
+  background: #4d5056;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #61656c;
+}

@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("VENDEDOR") // ADMIN, VENDEDOR, ENGENHEIRO, OPERADOR
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  budgets   Budget[]
+}
+
+model Employee {
+  id          String              @id @default(cuid())
+  name        String
+  role        String
+  monthlyCost Float               // Salario + beneficios
+  benefits    Float               @default(0)
+  active      Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  deductions  EmployeeDeduction[]
+  budgetAllocations BudgetEmployee[]
+}
+
+model EmployeeDeduction {
+  id          String   @id @default(cuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  type        String   // ALMOCO, ADIANTAMENTO, EPI, OUTROS
+  amount      Float
+  date        DateTime
+  description String?
+  createdAt   DateTime @default(now())
+}
+
+model Material {
+  id           String        @id @default(cuid())
+  name         String
+  unit         String        // KG, M, UN, M2
+  currentPrice Float
+  stock        Float         @default(0)
+  minStock     Float         @default(0)
+  category     String        // ACO, TINTA, PARAFUSO, OUTROS
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  budgetItems  BudgetItem[]
+  invoiceItems InvoiceItem[]
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  materialsJson String   @default("[]") // JSON array of {description, quantity, unitPrice}
+  ironCost      Float    @default(0)
+  paintCost     Float    @default(0)
+  defaultMargin Float    @default(20)
+  images        String?  // comma-separated paths
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  budgets       Budget[]
+}
+
+model Budget {
+  id             String           @id @default(cuid())
+  clientName     String
+  clientPhone    String?
+  clientEmail    String?
+  clientAddress  String?
+  productId      String?
+  product        Product?         @relation(fields: [productId], references: [id])
+  type           String           // PRODUTO, SERVICO
+  status         String           @default("RASCUNHO") // RASCUNHO, ENVIADO, APROVADO, REJEITADO
+  ironCost       Float            @default(0)
+  paintCost      Float            @default(0)
+  profitMargin   Float            @default(20) // %
+  casualtyMargin Float            @default(5)  // %
+  entryPercent   Float            @default(50) // % entrada
+  deliveryPercent Float           @default(50) // % entrega
+  totalCost      Float            @default(0)
+  totalPrice     Float            @default(0)
+  taxRate        Float            @default(0)
+  notes          String?
+  images         String?          // comma-separated paths
+  createdById    String?
+  createdBy      User?            @relation(fields: [createdById], references: [id])
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  items          BudgetItem[]
+  employees      BudgetEmployee[]
+  project        Project?
+  financialEntries FinancialEntry[]
+}
+
+model BudgetItem {
+  id          String    @id @default(cuid())
+  budgetId    String
+  budget      Budget    @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  materialId  String?
+  material    Material? @relation(fields: [materialId], references: [id])
+  description String
+  quantity    Float
+  unitPrice   Float
+}
+
+model BudgetEmployee {
+  id             String   @id @default(cuid())
+  budgetId       String
+  budget         Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  employeeId     String
+  employee       Employee @relation(fields: [employeeId], references: [id])
+  hoursAllocated Float
+}
+
+model Project {
+  id           String           @id @default(cuid())
+  budgetId     String           @unique
+  budget       Budget           @relation(fields: [budgetId], references: [id])
+  status       String           @default("PENDENTE") // PENDENTE, EM_PRODUCAO, CONCLUIDO, ENTREGUE
+  progress     Float            @default(0) // 0-100
+  startDate    DateTime?
+  expectedEnd  DateTime?
+  notes        String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  financialEntries FinancialEntry[]
+}
+
+model FinancialEntry {
+  id          String   @id @default(cuid())
+  type        String   // RECEITA, DESPESA
+  category    String   // PARCELA, FORNECEDOR, CUSTO_FIXO, VALE, OUTROS
+  description String
+  amount      Float
+  dueDate     DateTime
+  paidDate    DateTime?
+  status      String   @default("PENDENTE") // PENDENTE, PAGO, ATRASADO
+  budgetId    String?
+  budget      Budget?  @relation(fields: [budgetId], references: [id])
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model FixedCost {
+  id        String   @id @default(cuid())
+  name      String
+  amount    Float
+  category  String   // ALUGUEL, ENERGIA, INTERNET, CONTADOR, OUTROS
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TaxConfig {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   // ISS, ICMS
+  rate      Float    // percentual
+  appliesTo String   // PRODUTO, SERVICO, AMBOS
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BudgetTemplate {
+  id              String   @id @default(cuid())
+  companyName     String   @default("SteelArt")
+  companySubtitle String   @default("Estruturas Metalicas & Chales")
+  logoPath        String?  // path to uploaded logo
+  primaryColor    String   @default("#d97706") // amarelo/accent
+  secondaryColor  String   @default("#292524") // grafite dark
+  textColor       String   @default("#1a1a1a")
+  headerText      String?  // custom header text
+  footerText      String   @default("Orcamento gerado automaticamente — Validade: 15 dias")
+  termsText       String?  // termos e condicoes
+  warrantyText    String?  // garantia
+  validityDays    Int      @default(15)
+  updatedAt       DateTime @updatedAt
+}
+
+model Invoice {
+  id           String        @id @default(cuid())
+  supplierName String
+  supplierCnpj String?
+  number       String?
+  totalAmount  Float
+  xmlData      String?       // raw XML stored
+  importDate   DateTime      @default(now())
+  items        InvoiceItem[]
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  materialId  String?
+  material    Material? @relation(fields: [materialId], references: [id])
+  description String
+  quantity    Float
+  unitPrice   Float
+}
