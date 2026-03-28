@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { writeFile } from 'fs/promises'
-import path from 'path'
+import { requireAuth } from '@/lib/auth'
 
 async function getOrCreateTemplate() {
   let template = await prisma.budgetTemplate.findFirst()
@@ -12,6 +11,9 @@ async function getOrCreateTemplate() {
 }
 
 export async function GET() {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const template = await getOrCreateTemplate()
     return NextResponse.json(template)
@@ -22,6 +24,9 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const formData = await request.formData()
     const template = await getOrCreateTemplate()
@@ -44,16 +49,14 @@ export async function PUT(request: NextRequest) {
       data.validityDays = parseInt(validityDays as string) || 15
     }
 
-    // Handle logo upload
+    // Handle logo upload - convert to base64 data URI
     const logoFile = formData.get('logo') as File | null
     if (logoFile && logoFile.size > 0) {
       const bytes = await logoFile.arrayBuffer()
       const buffer = Buffer.from(bytes)
-      const ext = logoFile.name.split('.').pop() || 'png'
-      const fileName = `logo-${Date.now()}.${ext}`
-      const filePath = path.join(process.cwd(), 'public', 'uploads', 'template', fileName)
-      await writeFile(filePath, buffer)
-      data.logoPath = `/uploads/template/${fileName}`
+      const mimeType = logoFile.type || 'image/png'
+      const base64 = buffer.toString('base64')
+      data.logoPath = `data:${mimeType};base64,${base64}`
     }
 
     const removeLogo = formData.get('removeLogo')

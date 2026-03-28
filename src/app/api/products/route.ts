@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { writeFile, unlink } from 'fs/promises'
-import path from 'path'
+import { requireAuth } from '@/lib/auth'
 
 export async function GET() {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const products = await prisma.product.findMany({
       where: { active: true },
@@ -17,6 +19,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const formData = await request.formData()
     const name = formData.get('name') as string
@@ -30,18 +35,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Nome obrigatorio' }, { status: 400 })
     }
 
-    // Handle image uploads
-    const imagePaths: string[] = []
+    // Handle image uploads - convert to base64 data URI (max 5MB per file)
+    const MAX_IMAGE_SIZE = 5 * 1024 * 1024
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    const imageDataUris: string[] = []
     const files = formData.getAll('images') as File[]
     for (const file of files) {
       if (file.size > 0) {
+        if (file.size > MAX_IMAGE_SIZE) {
+          return NextResponse.json({ error: 'Imagem muito grande (max 5MB)' }, { status: 400 })
+        }
+        const mimeType = file.type || 'image/jpeg'
+        if (!ALLOWED_TYPES.includes(mimeType)) {
+          return NextResponse.json({ error: 'Tipo de imagem nao permitido' }, { status: 400 })
+        }
         const bytes = await file.arrayBuffer()
         const buffer = Buffer.from(bytes)
-        const ext = file.name.split('.').pop() || 'jpg'
-        const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
-        const filePath = path.join(process.cwd(), 'public', 'uploads', 'products', fileName)
-        await writeFile(filePath, buffer)
-        imagePaths.push(`/uploads/products/${fileName}`)
+        const base64 = buffer.toString('base64')
+        imageDataUris.push(`data:${mimeType};base64,${base64}`)
       }
     }
 
@@ -53,7 +64,7 @@ export async function POST(request: NextRequest) {
         ironCost,
         paintCost,
         defaultMargin,
-        images: imagePaths.length > 0 ? imagePaths.join(',') : null,
+        images: imageDataUris.length > 0 ? imageDataUris.join('|||') : null,
       },
     })
 
@@ -65,6 +76,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const formData = await request.formData()
     const id = formData.get('id') as string
@@ -85,35 +99,30 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Produto nao encontrado' }, { status: 404 })
     }
 
-    // Handle new image uploads
-    const newImagePaths: string[] = []
+    // Handle new image uploads - convert to base64 data URI (max 5MB per file)
+    const MAX_IMAGE_SIZE = 5 * 1024 * 1024
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    const newImageDataUris: string[] = []
     const files = formData.getAll('images') as File[]
     for (const file of files) {
       if (file.size > 0) {
+        if (file.size > MAX_IMAGE_SIZE) {
+          return NextResponse.json({ error: 'Imagem muito grande (max 5MB)' }, { status: 400 })
+        }
+        const mimeType = file.type || 'image/jpeg'
+        if (!ALLOWED_TYPES.includes(mimeType)) {
+          return NextResponse.json({ error: 'Tipo de imagem nao permitido' }, { status: 400 })
+        }
         const bytes = await file.arrayBuffer()
         const buffer = Buffer.from(bytes)
-        const ext = file.name.split('.').pop() || 'jpg'
-        const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
-        const filePath = path.join(process.cwd(), 'public', 'uploads', 'products', fileName)
-        await writeFile(filePath, buffer)
-        newImagePaths.push(`/uploads/products/${fileName}`)
+        const base64 = buffer.toString('base64')
+        newImageDataUris.push(`data:${mimeType};base64,${base64}`)
       }
     }
 
     // Merge existing images with new ones
-    const keepImages = existingImages ? existingImages.split(',').filter(Boolean) : []
-    const allImages = [...keepImages, ...newImagePaths]
-
-    // Delete removed images from disk
-    const oldImages = existing.images ? existing.images.split(',').filter(Boolean) : []
-    for (const oldImg of oldImages) {
-      if (!keepImages.includes(oldImg)) {
-        try {
-          const fullPath = path.join(process.cwd(), 'public', oldImg)
-          await unlink(fullPath)
-        } catch {}
-      }
-    }
+    const keepImages = existingImages ? existingImages.split('|||').filter(Boolean) : []
+    const allImages = [...keepImages, ...newImageDataUris]
 
     const product = await prisma.product.update({
       where: { id },
@@ -124,7 +133,7 @@ export async function PUT(request: NextRequest) {
         ironCost,
         paintCost,
         defaultMargin,
-        images: allImages.length > 0 ? allImages.join(',') : null,
+        images: allImages.length > 0 ? allImages.join('|||') : null,
       },
     })
 
@@ -136,6 +145,9 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const { id } = await request.json()
     if (!id) {

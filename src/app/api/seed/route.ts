@@ -4,10 +4,10 @@ import { hash } from 'bcryptjs'
 
 export async function POST() {
   try {
-    // Check if already seeded
+    // Only allow seed if no users exist (initial setup)
     const userCount = await prisma.user.count()
     if (userCount > 0) {
-      return NextResponse.json({ message: 'Database already seeded' }, { status: 200 })
+      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
     }
 
     const adminPassword = await hash('admin123', 12)

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 
 function getDateRange(periodo: string): { start: Date; end: Date } {
   const now = new Date()
@@ -29,6 +30,9 @@ function getDateRange(periodo: string): { start: Date; end: Date } {
 }
 
 export async function GET(request: NextRequest) {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const { searchParams } = new URL(request.url)
     const periodo = searchParams.get('periodo') || 'mes'

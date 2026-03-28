@@ -20,6 +20,7 @@ import {
   LogOut,
 } from 'lucide-react'
 import { signOut } from 'next-auth/react'
+import { useTheme } from './ThemeProvider'
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -35,6 +36,7 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
+  const { theme } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const userRole = (session?.user as any)?.role || ''
@@ -63,19 +65,27 @@ export default function Sidebar() {
     return pathname.startsWith(href)
   }
 
+  const primaryColor = theme.primaryColor
+
   const SidebarContent = () => (
     <>
       {/* Company branding */}
       <div className="flex items-center gap-3 px-6 py-6 border-b border-grafite-700">
-        <div className="w-10 h-10 bg-amarelo rounded-lg flex items-center justify-center">
-          <Hammer className="w-6 h-6 text-grafite-950" />
-        </div>
+        {theme.logoPath ? (
+          <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center bg-grafite-800">
+            <img src={theme.logoPath} alt="Logo" className="w-full h-full object-contain" />
+          </div>
+        ) : (
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.primaryColor }}>
+            <Hammer className="w-6 h-6 text-grafite-950" />
+          </div>
+        )}
         <div>
           <h1 className="text-lg font-bold text-gray-100 tracking-wide">
-            Metal<span className="text-amarelo">Gestao</span>
+            {theme.companyName}
           </h1>
           <p className="text-[10px] uppercase tracking-[0.2em] text-grafite-400 font-medium">
-            Sistema Industrial
+            {theme.companySubtitle}
           </p>
         </div>
       </div>
@@ -94,12 +104,13 @@ export default function Sidebar() {
                 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
                 ${
                   active
-                    ? 'bg-amarelo/10 text-amarelo border-l-[3px] border-amarelo pl-[9px]'
+                    ? 'border-l-[3px] pl-[9px]'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-grafite-700/50 border-l-[3px] border-transparent pl-[9px]'
                 }
               `}
+              style={active ? { color: primaryColor, borderColor: primaryColor, backgroundColor: `${primaryColor}15` } : undefined}
             >
-              <Icon className={`w-5 h-5 flex-shrink-0 ${active ? 'text-amarelo' : ''}`} />
+              <Icon className="w-5 h-5 flex-shrink-0" style={active ? { color: primaryColor } : undefined} />
               <span>{item.label}</span>
             </Link>
           )
@@ -119,12 +130,13 @@ export default function Sidebar() {
                   flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
                   ${
                     isActive('/usuarios')
-                      ? 'bg-amarelo/10 text-amarelo border-l-[3px] border-amarelo pl-[9px]'
+                      ? 'border-l-[3px] pl-[9px]'
                       : 'text-gray-400 hover:text-gray-200 hover:bg-grafite-700/50 border-l-[3px] border-transparent pl-[9px]'
                   }
                 `}
+                style={isActive('/usuarios') ? { color: primaryColor, borderColor: primaryColor, backgroundColor: `${primaryColor}15` } : undefined}
               >
-                <UserCog className={`w-5 h-5 flex-shrink-0 ${isActive('/usuarios') ? 'text-amarelo' : ''}`} />
+                <UserCog className="w-5 h-5 flex-shrink-0" style={isActive('/usuarios') ? { color: primaryColor } : undefined} />
                 <span>Usuarios</span>
               </Link>
             </div>
@@ -136,8 +148,8 @@ export default function Sidebar() {
       <div className="px-4 py-4 border-t border-grafite-700">
         {session?.user && (
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 bg-amarelo/20 rounded-full flex items-center justify-center">
-              <span className="text-xs font-bold text-amarelo">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${primaryColor}33` }}>
+              <span className="text-xs font-bold" style={{ color: primaryColor }}>
                 {session.user.name?.charAt(0).toUpperCase()}
               </span>
             </div>

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 
 export async function GET() {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const materials = await prisma.material.findMany({
       orderBy: { name: 'asc' },
@@ -17,6 +21,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const body = await request.json()
     const material = await prisma.material.create({
@@ -40,6 +47,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const body = await request.json()
     if (!body.id) {
@@ -70,6 +80,9 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')

@@ -187,7 +187,7 @@ function BudgetFormPanel({
     const materials: { description: string; quantity: number; unitPrice: number }[] =
       JSON.parse(product.materialsJson || '[]')
 
-    const productImages = product.images ? product.images.split(',').filter(Boolean) : []
+    const productImages = product.images ? product.images.split('|||').filter(Boolean) : []
 
     setForm((prev) => ({
       ...prev,
@@ -410,7 +410,7 @@ function BudgetFormPanel({
                     <div className="space-y-2 max-h-64 overflow-y-auto">
                       {products.map((product) => {
                         const isSelected = form.productId === product.id
-                        const imgs = product.images ? product.images.split(',').filter(Boolean) : []
+                        const imgs = product.images ? product.images.split('|||').filter(Boolean) : []
                         const mats: { description: string; quantity: number; unitPrice: number }[] =
                           JSON.parse(product.materialsJson || '[]')
                         const matCost = mats.reduce((s, m) => s + m.quantity * m.unitPrice, 0)
@@ -1104,7 +1104,7 @@ export default function ComercialPage() {
           selected: !!allocated,
         }
       }),
-      existingImages: budget.images ? budget.images.split(',').filter(Boolean) : [],
+      existingImages: budget.images ? budget.images.split('|||').filter(Boolean) : [],
       newImages: [],
     })
     setShowForm(true)
@@ -1131,7 +1131,7 @@ export default function ComercialPage() {
       deliveryPercent: form.deliveryPercent,
       taxRate: form.taxRate,
       notes: form.notes,
-      existingImages: form.existingImages.join(','),
+      existingImages: form.existingImages.join('|||'),
       items: form.items.filter((item) => item.description.trim()),
       employees: form.employees
         .filter((emp) => emp.selected && emp.hoursAllocated > 0)

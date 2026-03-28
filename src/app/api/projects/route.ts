@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
 
 export async function GET() {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const projects = await prisma.project.findMany({
       include: {
@@ -24,6 +28,9 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const body = await request.json()
     const { id, status, progress, notes, startDate, expectedEnd } = body

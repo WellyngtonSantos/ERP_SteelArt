@@ -87,7 +87,7 @@ export default function ProdutosPage() {
 
   const openEdit = (product: Product) => {
     const materials: MaterialItem[] = JSON.parse(product.materialsJson || '[]')
-    const existingImages = product.images ? product.images.split(',').filter(Boolean) : []
+    const existingImages = product.images ? product.images.split('|||').filter(Boolean) : []
     setForm({
       id: product.id,
       name: product.name,
@@ -115,7 +115,7 @@ export default function ProdutosPage() {
     formData.append('ironCost', String(form.ironCost))
     formData.append('paintCost', String(form.paintCost))
     formData.append('defaultMargin', String(form.defaultMargin))
-    formData.append('existingImages', form.existingImages.join(','))
+    formData.append('existingImages', form.existingImages.join('|||'))
 
     for (const file of form.newImages) {
       formData.append('images', file)
@@ -212,7 +212,7 @@ export default function ProdutosPage() {
   }
 
   const getProductImages = (product: Product) => {
-    return product.images ? product.images.split(',').filter(Boolean) : []
+    return product.images ? product.images.split('|||').filter(Boolean) : []
   }
 
   return (

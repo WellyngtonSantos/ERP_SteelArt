@@ -3,15 +3,13 @@ import { prisma } from '@/lib/prisma'
 import { calcOrcamento, calcValorHora } from '@/lib/calculations'
 import React from 'react'
 import { Document, Page, Text, View, StyleSheet, Image, renderToBuffer } from '@react-pdf/renderer'
-import { readFile } from 'fs/promises'
-import path from 'path'
 
 // --------------- Types ---------------
 
 interface TemplateConfig {
   companyName: string
   companySubtitle: string
-  logoBuffer?: Buffer | null
+  logoDataUri?: string | null
   primaryColor: string
   secondaryColor: string
   textColor: string
@@ -224,14 +222,14 @@ function OrcamentoPDF({
   calc,
   custoMaoDeObra,
   custoMateriais,
-  imageBuffers,
+  imageDataUris,
   template,
 }: {
   budget: any
   calc: ReturnType<typeof calcOrcamento>
   custoMaoDeObra: number
   custoMateriais: number
-  imageBuffers: { src: string; buffer: Buffer }[]
+  imageDataUris: string[]
   template: TemplateConfig
 }) {
   const s = createStyles(template)
@@ -243,8 +241,8 @@ function OrcamentoPDF({
         {/* Header */}
         <View style={s.header}>
           <View>
-            {template.logoBuffer ? (
-              <Image style={s.logoImage} src={template.logoBuffer} />
+            {template.logoDataUri ? (
+              <Image style={s.logoImage} src={template.logoDataUri} />
             ) : (
               <Text style={s.logo}>
                 {template.companyName.split(/(?=[A-Z])/).map((part, i) =>
@@ -421,13 +419,13 @@ function OrcamentoPDF({
         </View>
 
         {/* Reference Images */}
-        {imageBuffers.length > 0 && (
-          <View style={s.imagesSection} break={imageBuffers.length > 2}>
+        {imageDataUris.length > 0 && (
+          <View style={s.imagesSection} break={imageDataUris.length > 2}>
             <Text style={s.sectionTitle}>IMAGENS DE REFERENCIA</Text>
             <View style={s.imagesGrid}>
-              {imageBuffers.map((img, i) => (
+              {imageDataUris.map((dataUri, i) => (
                 <View key={i} style={s.imageContainer}>
-                  <Image style={s.budgetImage} src={img.buffer} />
+                  <Image style={s.budgetImage} src={dataUri} />
                 </View>
               ))}
             </View>
@@ -492,21 +490,10 @@ export async function GET(
       dbTemplate = await prisma.budgetTemplate.create({ data: {} })
     }
 
-    // Load logo if exists
-    let logoBuffer: Buffer | null = null
-    if (dbTemplate.logoPath) {
-      try {
-        const logoFullPath = path.join(process.cwd(), 'public', dbTemplate.logoPath)
-        logoBuffer = await readFile(logoFullPath)
-      } catch {
-        // Logo file missing, skip
-      }
-    }
-
     const template: TemplateConfig = {
       companyName: dbTemplate.companyName,
       companySubtitle: dbTemplate.companySubtitle,
-      logoBuffer,
+      logoDataUri: dbTemplate.logoPath || null,
       primaryColor: dbTemplate.primaryColor,
       secondaryColor: dbTemplate.secondaryColor,
       textColor: dbTemplate.textColor,
@@ -538,20 +525,8 @@ export async function GET(
       aliquotaImposto: budget.taxRate,
     })
 
-    // Load budget images
-    const imageBuffers: { src: string; buffer: Buffer }[] = []
-    if (budget.images) {
-      const imagePaths = budget.images.split(',').filter(Boolean)
-      for (const imgPath of imagePaths) {
-        try {
-          const fullPath = path.join(process.cwd(), 'public', imgPath)
-          const buffer = await readFile(fullPath)
-          imageBuffers.push({ src: imgPath, buffer })
-        } catch {
-          // Skip missing images
-        }
-      }
-    }
+    // Get budget images (stored as base64 data URIs)
+    const imageDataUris = budget.images ? budget.images.split('|||').filter(Boolean) : []
 
     const pdfBuffer = await renderToBuffer(
       <OrcamentoPDF
@@ -559,7 +534,7 @@ export async function GET(
         calc={calc}
         custoMaoDeObra={custoMaoDeObra}
         custoMateriais={custoMateriais}
-        imageBuffers={imageBuffers}
+        imageDataUris={imageDataUris}
         template={template}
       />
     )

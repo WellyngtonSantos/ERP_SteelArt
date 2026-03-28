@@ -11,7 +11,9 @@ import {
   Eye,
   Upload,
   Trash2,
+  Monitor,
 } from 'lucide-react'
+import { useTheme } from '@/components/ThemeProvider'
 
 interface TemplateData {
   id: string
@@ -36,6 +38,7 @@ export default function ConfiguracoesPage() {
   const [newLogo, setNewLogo] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'identity' | 'colors' | 'texts' | 'preview'>('identity')
+  const { refreshTheme } = useTheme()
 
   const fetchTemplate = useCallback(async () => {
     setLoading(true)
@@ -87,6 +90,7 @@ export default function ConfiguracoesPage() {
         setTemplate(data)
         setNewLogo(null)
         if (data.logoPath) setLogoPreview(data.logoPath)
+        refreshTheme()
         setSaved(true)
         setTimeout(() => setSaved(false), 3000)
       } else {
@@ -144,9 +148,9 @@ export default function ConfiguracoesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">Template do Orcamento</h1>
+          <h1 className="text-2xl font-bold text-gray-100">Configuracoes do Sistema</h1>
           <p className="text-sm text-gray-400 mt-1">
-            Personalize a aparencia dos PDFs de orcamento
+            Personalize o cabecalho, cores e aparencia dos PDFs
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -195,6 +199,9 @@ export default function ConfiguracoesPage() {
           <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider">
             Identidade da Empresa
           </h3>
+          <p className="text-xs text-gray-500">
+            O nome, subtitulo e logo aparecem no cabecalho lateral e nos PDFs de orcamento.
+          </p>
 
           {/* Logo */}
           <div>
@@ -256,8 +263,11 @@ export default function ConfiguracoesPage() {
       {activeTab === 'colors' && (
         <div className="card space-y-6">
           <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider">
-            Cores do PDF
+            Cores do Sistema e PDF
           </h3>
+          <p className="text-xs text-gray-500">
+            As cores afetam o cabecalho lateral do sistema e a aparencia dos PDFs gerados.
+          </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>

@@ -1,7 +1,9 @@
-import { NextAuthOptions } from 'next-auth'
+import { NextAuthOptions, getServerSession } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { compare } from 'bcryptjs'
 import { prisma } from './prisma'
+import { NextResponse } from 'next/server'
+import { checkRateLimit } from './rate-limit'
 
 export const ALL_PAGES = [
   { path: '/', label: 'Dashboard' },
@@ -24,6 +26,10 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
+
+        // Rate limit by email
+        const { allowed } = checkRateLimit(`login:${credentials.email}`)
+        if (!allowed) return null
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
@@ -75,5 +81,25 @@ export const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: 'jwt',
+    maxAge: 8 * 60 * 60, // 8 hours
   },
+}
+
+// Helper: require authenticated session on API routes
+export async function requireAuth() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return { error: NextResponse.json({ error: 'Nao autorizado' }, { status: 401 }), session: null }
+  }
+  return { error: null, session }
+}
+
+// Helper: require admin role
+export async function requireAdmin() {
+  const { error, session } = await requireAuth()
+  if (error) return { error, session: null }
+  if ((session!.user as any).role !== 'ADMIN') {
+    return { error: NextResponse.json({ error: 'Acesso negado' }, { status: 403 }), session: null }
+  }
+  return { error: null, session }
 }

@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { parseNFXml } from '@/lib/xml-parser'
+import { requireAuth } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const body = await request.json()
     if (!body.xml) {
@@ -126,6 +130,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const invoices = await prisma.invoice.findMany({
       include: {

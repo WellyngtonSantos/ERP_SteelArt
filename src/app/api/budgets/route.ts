@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { calcOrcamento, calcValorHora } from '@/lib/calculations'
-import { writeFile } from 'fs/promises'
-import path from 'path'
+import { requireAuth } from '@/lib/auth'
 
 async function parseRequestBody(request: NextRequest) {
   const contentType = request.headers.get('content-type') || ''
@@ -12,24 +11,26 @@ async function parseRequestBody(request: NextRequest) {
     const dataStr = formData.get('data') as string
     const body = JSON.parse(dataStr)
 
-    // Handle image uploads
-    const imagePaths: string[] = []
+    // Handle image uploads - convert to base64 data URI (max 5MB per file)
+    const MAX_IMAGE_SIZE = 5 * 1024 * 1024
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    const imageDataUris: string[] = []
     const files = formData.getAll('images') as File[]
     for (const file of files) {
       if (file.size > 0) {
+        if (file.size > MAX_IMAGE_SIZE) throw new Error('Imagem muito grande (max 5MB)')
+        const mimeType = file.type || 'image/jpeg'
+        if (!ALLOWED_TYPES.includes(mimeType)) throw new Error('Tipo de imagem nao permitido')
         const bytes = await file.arrayBuffer()
         const buffer = Buffer.from(bytes)
-        const ext = file.name.split('.').pop() || 'jpg'
-        const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
-        const filePath = path.join(process.cwd(), 'public', 'uploads', 'budgets', fileName)
-        await writeFile(filePath, buffer)
-        imagePaths.push(`/uploads/budgets/${fileName}`)
+        const base64 = buffer.toString('base64')
+        imageDataUris.push(`data:${mimeType};base64,${base64}`)
       }
     }
 
     // Merge existing images with new uploads
-    const existingImages = body.existingImages ? body.existingImages.split(',').filter(Boolean) : []
-    body.images = [...existingImages, ...imagePaths].join(',') || null
+    const existingImages = body.existingImages ? body.existingImages.split('|||').filter(Boolean) : []
+    body.images = [...existingImages, ...imageDataUris].join('|||') || null
     delete body.existingImages
     return body
   }
@@ -44,6 +45,9 @@ async function parseRequestBody(request: NextRequest) {
 }
 
 export async function GET() {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const budgets = await prisma.budget.findMany({
       include: {
@@ -62,6 +66,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const body = await parseRequestBody(request)
     const {
@@ -220,6 +227,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  const { error } = await requireAuth()
+  if (error) return error
+
   try {
     const body = await parseRequestBody(request)
     const {
