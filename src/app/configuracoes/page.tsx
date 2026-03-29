@@ -12,8 +12,65 @@ import {
   Upload,
   Trash2,
   Monitor,
+  History,
+  Sparkles,
+  Bug,
+  Wrench,
+  RefreshCw,
+  Zap,
+  CheckCircle,
+  GitCommit,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react'
 import { useTheme } from '@/components/ThemeProvider'
+
+interface ChangelogItem {
+  sha: string
+  message: string
+  description: string
+  author: string
+  date: string
+}
+
+interface ChangelogGroup {
+  type: string
+  label: string
+  icon: string
+  items: ChangelogItem[]
+}
+
+interface ChangelogData {
+  groups: ChangelogGroup[]
+  totalCommits: number
+  lastUpdate: string | null
+}
+
+const CHANGELOG_ICONS: Record<string, React.ComponentType<any>> = {
+  sparkles: Sparkles,
+  bug: Bug,
+  wrench: Wrench,
+  refresh: RefreshCw,
+  palette: Palette,
+  'file-text': FileText,
+  zap: Zap,
+  'check-circle': CheckCircle,
+  'git-commit': GitCommit,
+}
+
+const CHANGELOG_COLORS: Record<string, string> = {
+  feat: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
+  fix: 'text-red-400 bg-red-400/10 border-red-400/30',
+  chore: 'text-gray-400 bg-gray-400/10 border-gray-400/30',
+  refactor: 'text-blue-400 bg-blue-400/10 border-blue-400/30',
+  style: 'text-pink-400 bg-pink-400/10 border-pink-400/30',
+  perf: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/30',
+  docs: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/30',
+  test: 'text-purple-400 bg-purple-400/10 border-purple-400/30',
+  other: 'text-gray-400 bg-gray-400/10 border-gray-400/30',
+}
 
 interface TemplateData {
   id: string
@@ -37,7 +94,12 @@ export default function ConfiguracoesPage() {
   const [saved, setSaved] = useState(false)
   const [newLogo, setNewLogo] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'identity' | 'colors' | 'texts' | 'preview'>('identity')
+  const [activeTab, setActiveTab] = useState<'identity' | 'colors' | 'texts' | 'preview' | 'changelog'>('identity')
+  const [changelog, setChangelog] = useState<ChangelogData | null>(null)
+  const [changelogLoading, setChangelogLoading] = useState(false)
+  const [changelogError, setChangelogError] = useState('')
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
   const { refreshTheme } = useTheme()
 
   const fetchTemplate = useCallback(async () => {
@@ -55,9 +117,38 @@ export default function ConfiguracoesPage() {
     setLoading(false)
   }, [])
 
+  const fetchChangelog = useCallback(async () => {
+    if (changelog) return // Already loaded
+    setChangelogLoading(true)
+    setChangelogError('')
+    try {
+      const res = await fetch('/api/changelog')
+      const data = await res.json()
+      if (!res.ok) {
+        setChangelogError(data.error || 'Erro ao carregar atualizacoes')
+        return
+      }
+      setChangelog(data)
+      // Expand first group by default
+      if (data.groups.length > 0) {
+        setExpandedGroups({ [data.groups[0].type]: true })
+      }
+    } catch {
+      setChangelogError('Erro de conexao ao buscar atualizacoes')
+    } finally {
+      setChangelogLoading(false)
+    }
+  }, [changelog])
+
   useEffect(() => {
     fetchTemplate()
   }, [fetchTemplate])
+
+  useEffect(() => {
+    if (activeTab === 'changelog') {
+      fetchChangelog()
+    }
+  }, [activeTab, fetchChangelog])
 
   const handleSave = async () => {
     if (!template) return
@@ -141,7 +232,29 @@ export default function ConfiguracoesPage() {
     { id: 'colors' as const, label: 'Cores', icon: Palette },
     { id: 'texts' as const, label: 'Textos', icon: Type },
     { id: 'preview' as const, label: 'Preview', icon: Eye },
+    { id: 'changelog' as const, label: 'Atualizacoes', icon: History },
   ]
+
+  const toggleGroup = (type: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [type]: !prev[type] }))
+  }
+
+  const toggleItem = (key: string) => {
+    setExpandedItems((prev) => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr)
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  }
+
+  const formatDateTime = (dateStr: string) => {
+    const d = new Date(dateStr)
+    return d.toLocaleDateString('pt-BR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -560,6 +673,155 @@ export default function ConfiguracoesPage() {
               {template.companyName} — {template.footerText} — Validade: {template.validityDays} dias
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Changelog Tab */}
+      {activeTab === 'changelog' && (
+        <div className="card space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider">
+                Historico de Atualizacoes
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Todas as funcionalidades e correcoes implementadas no sistema
+              </p>
+            </div>
+            {changelog && (
+              <div className="text-right">
+                <p className="text-xs text-gray-400">
+                  {changelog.totalCommits} atualizacoes
+                </p>
+                {changelog.lastUpdate && (
+                  <p className="text-xs text-gray-500">
+                    Ultima: {formatDate(changelog.lastUpdate)}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {changelogLoading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-amarelo mr-3" />
+              <span className="text-sm text-gray-400">Carregando historico...</span>
+            </div>
+          )}
+
+          {changelogError && (
+            <div className="flex items-center gap-3 p-4 bg-red-400/10 border border-red-400/30 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+              <div>
+                <p className="text-sm text-red-400">{changelogError}</p>
+                <button
+                  onClick={() => { setChangelog(null); fetchChangelog() }}
+                  className="text-xs text-red-300 underline mt-1"
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            </div>
+          )}
+
+          {changelog && !changelogLoading && (
+            <div className="space-y-3">
+              {changelog.groups.map((group) => {
+                const IconComp = CHANGELOG_ICONS[group.icon] || GitCommit
+                const colorClass = CHANGELOG_COLORS[group.type] || CHANGELOG_COLORS.other
+                const isExpanded = expandedGroups[group.type] || false
+
+                return (
+                  <div key={group.type} className="border border-grafite-700 rounded-lg overflow-hidden">
+                    {/* Group Header */}
+                    <button
+                      onClick={() => toggleGroup(group.type)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-grafite-800 hover:bg-grafite-700 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${colorClass}`}>
+                          <IconComp className="w-4 h-4" />
+                        </div>
+                        <div className="text-left">
+                          <span className="text-sm font-semibold text-gray-200">{group.label}</span>
+                          <span className="text-xs text-gray-500 ml-2">({group.items.length})</span>
+                        </div>
+                      </div>
+                      {isExpanded ? (
+                        <ChevronUp className="w-4 h-4 text-gray-400" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
+
+                    {/* Group Items */}
+                    {isExpanded && (
+                      <div className="divide-y divide-grafite-700/50">
+                        {group.items.map((item, idx) => {
+                          const itemKey = `${group.type}-${idx}`
+                          const isItemExpanded = expandedItems[itemKey] || false
+                          const hasDescription = item.description && item.description.length > 0
+
+                          return (
+                            <div key={itemKey} className="bg-grafite-900/50">
+                              <button
+                                onClick={() => hasDescription && toggleItem(itemKey)}
+                                className={`w-full flex items-start gap-3 px-4 py-3 text-left ${
+                                  hasDescription ? 'hover:bg-grafite-800/50 cursor-pointer' : 'cursor-default'
+                                } transition-colors`}
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-gray-200">{item.message}</span>
+                                    {hasDescription && (
+                                      <ChevronDown
+                                        className={`w-3.5 h-3.5 text-gray-500 flex-shrink-0 transition-transform ${
+                                          isItemExpanded ? 'rotate-180' : ''
+                                        }`}
+                                      />
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 mt-1">
+                                    <span className="text-[10px] font-mono text-gray-500 bg-grafite-800 px-1.5 py-0.5 rounded">
+                                      {item.sha}
+                                    </span>
+                                    <span className="text-[10px] text-gray-500">
+                                      {formatDateTime(item.date)}
+                                    </span>
+                                    <span className="text-[10px] text-gray-500">
+                                      por {item.author}
+                                    </span>
+                                  </div>
+                                </div>
+                              </button>
+
+                              {/* Expanded Description */}
+                              {isItemExpanded && hasDescription && (
+                                <div className="px-4 pb-3">
+                                  <div className="ml-0 p-3 bg-grafite-800 rounded-lg border border-grafite-700">
+                                    <pre className="text-xs text-gray-300 whitespace-pre-wrap font-sans leading-relaxed">
+                                      {item.description}
+                                    </pre>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {changelog.groups.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <GitCommit className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Nenhuma atualizacao encontrada</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

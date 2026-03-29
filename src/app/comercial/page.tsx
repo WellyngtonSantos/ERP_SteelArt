@@ -15,6 +15,8 @@ import {
   Package,
   Pencil,
   Image as ImageIcon,
+  Building2,
+  Loader2,
 } from 'lucide-react'
 import { calcOrcamento, calcValorHora, formatCurrency, formatPercent } from '@/lib/calculations'
 
@@ -63,6 +65,7 @@ interface BudgetForm {
   id?: string
   productId?: string
   productMode: 'custom' | 'catalog'
+  clientCnpj: string
   clientName: string
   clientPhone: string
   clientEmail: string
@@ -86,6 +89,7 @@ interface BudgetForm {
 interface Budget {
   id: string
   clientName: string
+  clientCnpj?: string
   clientPhone?: string
   clientEmail?: string
   clientAddress?: string
@@ -135,8 +139,18 @@ const STATUS_LABELS: Record<string, string> = {
   REJEITADO: 'Rejeitado',
 }
 
+const formatCnpj = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 14)
+  return digits
+    .replace(/^(\d{2})(\d)/, '$1.$2')
+    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1/$2')
+    .replace(/(\d{4})(\d)/, '$1-$2')
+}
+
 const emptyForm = (): BudgetForm => ({
   productMode: 'custom',
+  clientCnpj: '',
   clientName: '',
   clientPhone: '',
   clientEmail: '',
@@ -179,6 +193,40 @@ function BudgetFormPanel({
   saving: boolean
 }) {
   const [activeSection, setActiveSection] = useState<string>('product')
+  const [cnpjLoading, setCnpjLoading] = useState(false)
+  const [cnpjError, setCnpjError] = useState('')
+  const [cnpjSuccess, setCnpjSuccess] = useState('')
+
+  const handleCnpjSearch = useCallback(async () => {
+    const cnpjClean = form.clientCnpj.replace(/\D/g, '')
+    if (cnpjClean.length !== 14) {
+      setCnpjError('CNPJ deve ter 14 digitos')
+      return
+    }
+    setCnpjLoading(true)
+    setCnpjError('')
+    setCnpjSuccess('')
+    try {
+      const res = await fetch(`/api/cnpj?cnpj=${cnpjClean}`)
+      const data = await res.json()
+      if (!res.ok) {
+        setCnpjError(data.error || 'Erro ao consultar CNPJ')
+        return
+      }
+      setForm((prev) => ({
+        ...prev,
+        clientName: data.nomeFantasia || data.razaoSocial || prev.clientName,
+        clientPhone: data.telefone || prev.clientPhone,
+        clientEmail: data.email ? data.email.toLowerCase() : prev.clientEmail,
+        clientAddress: data.endereco || prev.clientAddress,
+      }))
+      setCnpjSuccess(data.razaoSocial || 'Dados encontrados')
+    } catch {
+      setCnpjError('Erro de conexao. Tente novamente.')
+    } finally {
+      setCnpjLoading(false)
+    }
+  }, [form.clientCnpj, setForm])
 
   const loadProduct = useCallback((productId: string) => {
     const product = products.find((p) => p.id === productId)
@@ -465,6 +513,49 @@ function BudgetFormPanel({
 
             {/* Client Info */}
             <Section id="client" title="Dados do Cliente">
+              {/* CNPJ Search */}
+              <div className="mb-4">
+                <label className="label-field flex items-center gap-1">
+                  <Building2 className="w-3.5 h-3.5" />
+                  CNPJ (auto preenchimento)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="input-field flex-1"
+                    value={form.clientCnpj}
+                    onChange={(e) => {
+                      updateField('clientCnpj', formatCnpj(e.target.value))
+                      setCnpjError('')
+                      setCnpjSuccess('')
+                    }}
+                    placeholder="00.000.000/0000-00"
+                    maxLength={18}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCnpjSearch}
+                    disabled={cnpjLoading || form.clientCnpj.replace(/\D/g, '').length !== 14}
+                    className="px-4 py-2 bg-amarelo text-grafite-900 rounded-lg font-semibold text-sm hover:bg-amarelo/90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                  >
+                    {cnpjLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Search className="w-4 h-4" />
+                    )}
+                    Buscar
+                  </button>
+                </div>
+                {cnpjError && (
+                  <p className="text-red-400 text-xs mt-1">{cnpjError}</p>
+                )}
+                {cnpjSuccess && (
+                  <p className="text-green-400 text-xs mt-1">
+                    Dados preenchidos - {cnpjSuccess}
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="label-field">Nome do Cliente *</label>
@@ -473,7 +564,7 @@ function BudgetFormPanel({
                     className="input-field"
                     value={form.clientName}
                     onChange={(e) => updateField('clientName', e.target.value)}
-                    placeholder="Nome completo"
+                    placeholder="Nome completo ou razao social"
                   />
                 </div>
                 <div>
@@ -1076,6 +1167,7 @@ export default function ComercialPage() {
       id: budget.id,
       productId: (budget as any).productId || undefined,
       productMode: (budget as any).productId ? 'catalog' : 'custom',
+      clientCnpj: budget.clientCnpj || '',
       clientName: budget.clientName,
       clientPhone: budget.clientPhone || '',
       clientEmail: budget.clientEmail || '',
@@ -1118,6 +1210,7 @@ export default function ComercialPage() {
       ...(form.id ? { id: form.id } : {}),
       productId: form.productMode === 'catalog' ? form.productId || null : null,
       clientName: form.clientName,
+      clientCnpj: form.clientCnpj,
       clientPhone: form.clientPhone,
       clientEmail: form.clientEmail,
       clientAddress: form.clientAddress,

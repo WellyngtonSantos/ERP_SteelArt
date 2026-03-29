@@ -18,6 +18,7 @@ import {
   Settings,
   UserCog,
   LogOut,
+  Map,
 } from 'lucide-react'
 import { signOut } from 'next-auth/react'
 import { useTheme } from './ThemeProvider'
@@ -31,6 +32,7 @@ const navItems = [
   { href: '/rh', label: 'RH', icon: Users },
   { href: '/financeiro', label: 'Financeiro', icon: DollarSign },
   { href: '/configuracoes', label: 'Configuracoes', icon: Settings },
+  { href: '/mapa', label: 'Mapa do Sistema', icon: Map },
 ]
 
 export default function Sidebar() {

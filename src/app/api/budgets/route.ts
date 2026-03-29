@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
     const body = await parseRequestBody(request)
     const {
       clientName,
+      clientCnpj,
       clientPhone,
       clientEmail,
       clientAddress,
@@ -129,6 +130,7 @@ export async function POST(request: NextRequest) {
     const budget = await prisma.budget.create({
       data: {
         clientName,
+        clientCnpj: clientCnpj || null,
         clientPhone: clientPhone || null,
         clientEmail: clientEmail || null,
         clientAddress: clientAddress || null,
@@ -235,6 +237,7 @@ export async function PUT(request: NextRequest) {
     const {
       id,
       clientName,
+      clientCnpj,
       clientPhone,
       clientEmail,
       clientAddress,
@@ -308,6 +311,7 @@ export async function PUT(request: NextRequest) {
       where: { id },
       data: {
         clientName,
+        clientCnpj: clientCnpj || null,
         clientPhone: clientPhone || null,
         clientEmail: clientEmail || null,
         clientAddress: clientAddress || null,

@@ -272,6 +272,12 @@ function OrcamentoPDF({
           <Text style={s.label}>Nome:</Text>
           <Text style={s.value}>{budget.clientName}</Text>
         </View>
+        {budget.clientCnpj && (
+          <View style={s.row}>
+            <Text style={s.label}>CNPJ:</Text>
+            <Text style={s.value}>{budget.clientCnpj}</Text>
+          </View>
+        )}
         {budget.clientPhone && (
           <View style={s.row}>
             <Text style={s.label}>Telefone:</Text>

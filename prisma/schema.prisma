@@ -76,6 +76,7 @@ model Product {
 model Budget {
   id             String           @id @default(cuid())
   clientName     String
+  clientCnpj     String?
   clientPhone    String?
   clientEmail    String?
   clientAddress  String?
