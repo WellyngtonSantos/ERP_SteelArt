@@ -31,7 +31,6 @@ interface ChangelogItem {
   sha: string
   message: string
   description: string
-  author: string
   date: string
 }
 
@@ -246,14 +245,6 @@ export default function ConfiguracoesPage() {
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr)
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  }
-
-  const formatDateTime = (dateStr: string) => {
-    const d = new Date(dateStr)
-    return d.toLocaleDateString('pt-BR', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    })
   }
 
   return (
@@ -682,16 +673,16 @@ export default function ConfiguracoesPage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider">
-                Historico de Atualizacoes
+                O que ha de novo
               </h3>
               <p className="text-xs text-gray-500 mt-1">
-                Todas as funcionalidades e correcoes implementadas no sistema
+                Veja tudo que foi adicionado e melhorado no sistema
               </p>
             </div>
             {changelog && (
               <div className="text-right">
                 <p className="text-xs text-gray-400">
-                  {changelog.totalCommits} atualizacoes
+                  {changelog.totalCommits} {changelog.totalCommits === 1 ? 'atualizacao' : 'atualizacoes'}
                 </p>
                 {changelog.lastUpdate && (
                   <p className="text-xs text-gray-500">
@@ -781,17 +772,9 @@ export default function ConfiguracoesPage() {
                                       />
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-3 mt-1">
-                                    <span className="text-[10px] font-mono text-gray-500 bg-grafite-800 px-1.5 py-0.5 rounded">
-                                      {item.sha}
-                                    </span>
-                                    <span className="text-[10px] text-gray-500">
-                                      {formatDateTime(item.date)}
-                                    </span>
-                                    <span className="text-[10px] text-gray-500">
-                                      por {item.author}
-                                    </span>
-                                  </div>
+                                  <span className="text-[10px] text-gray-500 mt-1 block">
+                                    {formatDate(item.date)}
+                                  </span>
                                 </div>
                               </button>
 
