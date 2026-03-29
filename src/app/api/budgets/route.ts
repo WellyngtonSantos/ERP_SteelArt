@@ -55,6 +55,7 @@ export async function GET() {
         employees: { include: { employee: true } },
         project: true,
         product: true,
+        client: true,
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await parseRequestBody(request)
     const {
+      clientId,
       clientName,
       clientCnpj,
       clientPhone,
@@ -129,6 +131,7 @@ export async function POST(request: NextRequest) {
 
     const budget = await prisma.budget.create({
       data: {
+        clientId: clientId || null,
         clientName,
         clientCnpj: clientCnpj || null,
         clientPhone: clientPhone || null,
@@ -236,6 +239,7 @@ export async function PUT(request: NextRequest) {
     const body = await parseRequestBody(request)
     const {
       id,
+      clientId,
       clientName,
       clientCnpj,
       clientPhone,
@@ -310,6 +314,7 @@ export async function PUT(request: NextRequest) {
     const budget = await prisma.budget.update({
       where: { id },
       data: {
+        clientId: clientId || null,
         clientName,
         clientCnpj: clientCnpj || null,
         clientPhone: clientPhone || null,

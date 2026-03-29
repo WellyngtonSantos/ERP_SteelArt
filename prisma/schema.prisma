@@ -73,8 +73,24 @@ model Product {
   budgets       Budget[]
 }
 
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  cnpj      String?  @unique
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  budgets   Budget[]
+}
+
 model Budget {
   id             String           @id @default(cuid())
+  clientId       String?
+  client         Client?          @relation(fields: [clientId], references: [id])
   clientName     String
   clientCnpj     String?
   clientPhone    String?

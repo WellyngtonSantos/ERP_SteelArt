@@ -61,10 +61,21 @@ interface ProductData {
   images?: string
 }
 
+interface ClientData {
+  id: string
+  name: string
+  cnpj: string | null
+  phone: string | null
+  email: string | null
+  address: string | null
+}
+
 interface BudgetForm {
   id?: string
   productId?: string
   productMode: 'custom' | 'catalog'
+  clientMode: 'registered' | 'quick'
+  clientId?: string
   clientCnpj: string
   clientName: string
   clientPhone: string
@@ -148,8 +159,43 @@ const formatCnpj = (value: string) => {
     .replace(/(\d{4})(\d)/, '$1-$2')
 }
 
+// Stable Section component - defined outside to prevent unmount/remount on re-render (fixes iPad/iPhone keyboard closing)
+function AccordionSection({
+  id,
+  title,
+  activeSection,
+  onToggle,
+  children,
+}: {
+  id: string
+  title: string
+  activeSection: string
+  onToggle: (id: string) => void
+  children: React.ReactNode
+}) {
+  const isOpen = activeSection === id
+  return (
+    <div className="border border-grafite-700 rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={() => onToggle(isOpen ? '' : id)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-grafite-800 hover:bg-grafite-700 transition-colors text-left"
+      >
+        <span className="text-sm font-semibold text-gray-200">{title}</span>
+        {isOpen ? (
+          <ChevronUp className="w-4 h-4 text-gray-400" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-gray-400" />
+        )}
+      </button>
+      {isOpen && <div className="p-4 bg-grafite-900/50 space-y-4">{children}</div>}
+    </div>
+  )
+}
+
 const emptyForm = (): BudgetForm => ({
   productMode: 'custom',
+  clientMode: 'registered',
   clientCnpj: '',
   clientName: '',
   clientPhone: '',
@@ -179,6 +225,7 @@ function BudgetFormPanel({
   allEmployees,
   materials,
   products,
+  clients,
   onSave,
   onClose,
   saving,
@@ -188,6 +235,7 @@ function BudgetFormPanel({
   allEmployees: Employee[]
   materials: Material[]
   products: ProductData[]
+  clients: ClientData[]
   onSave: (status: string) => void
   onClose: () => void
   saving: boolean
@@ -196,6 +244,32 @@ function BudgetFormPanel({
   const [cnpjLoading, setCnpjLoading] = useState(false)
   const [cnpjError, setCnpjError] = useState('')
   const [cnpjSuccess, setCnpjSuccess] = useState('')
+  const [clientSearch, setClientSearch] = useState('')
+
+  const filteredClients = useMemo(() => {
+    if (!clientSearch) return clients
+    const term = clientSearch.toLowerCase()
+    return clients.filter(
+      (c) =>
+        c.name.toLowerCase().includes(term) ||
+        c.cnpj?.includes(clientSearch.replace(/\D/g, '')) ||
+        c.email?.toLowerCase().includes(term)
+    )
+  }, [clients, clientSearch])
+
+  const loadClient = useCallback((clientId: string) => {
+    const client = clients.find((c) => c.id === clientId)
+    if (!client) return
+    setForm((prev) => ({
+      ...prev,
+      clientId: client.id,
+      clientName: client.name,
+      clientCnpj: client.cnpj ? formatCnpj(client.cnpj) : '',
+      clientPhone: client.phone || '',
+      clientEmail: client.email || '',
+      clientAddress: client.address || '',
+    }))
+  }, [clients, setForm])
 
   const handleCnpjSearch = useCallback(async () => {
     const cnpjClean = form.clientCnpj.replace(/\D/g, '')
@@ -355,34 +429,11 @@ function BudgetFormPanel({
     [setForm]
   )
 
-  const Section = ({
-    id,
-    title,
-    children,
-  }: {
-    id: string
-    title: string
-    children: React.ReactNode
-  }) => {
-    const isOpen = activeSection === id
-    return (
-      <div className="border border-grafite-700 rounded-lg overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setActiveSection(isOpen ? '' : id)}
-          className="w-full flex items-center justify-between px-4 py-3 bg-grafite-800 hover:bg-grafite-700 transition-colors text-left"
-        >
-          <span className="text-sm font-semibold text-gray-200">{title}</span>
-          {isOpen ? (
-            <ChevronUp className="w-4 h-4 text-gray-400" />
-          ) : (
-            <ChevronDown className="w-4 h-4 text-gray-400" />
-          )}
-        </button>
-        {isOpen && <div className="p-4 bg-grafite-900/50 space-y-4">{children}</div>}
-      </div>
-    )
-  }
+  const Section = ({ id, title, children }: { id: string; title: string; children: React.ReactNode }) => (
+    <AccordionSection id={id} title={title} activeSection={activeSection} onToggle={setActiveSection}>
+      {children}
+    </AccordionSection>
+  )
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -513,49 +564,154 @@ function BudgetFormPanel({
 
             {/* Client Info */}
             <Section id="client" title="Dados do Cliente">
-              {/* CNPJ Search */}
-              <div className="mb-4">
-                <label className="label-field flex items-center gap-1">
-                  <Building2 className="w-3.5 h-3.5" />
-                  CNPJ (auto preenchimento)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    className="input-field flex-1"
-                    value={form.clientCnpj}
-                    onChange={(e) => {
-                      updateField('clientCnpj', formatCnpj(e.target.value))
-                      setCnpjError('')
-                      setCnpjSuccess('')
-                    }}
-                    placeholder="00.000.000/0000-00"
-                    maxLength={18}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCnpjSearch}
-                    disabled={cnpjLoading || form.clientCnpj.replace(/\D/g, '').length !== 14}
-                    className="px-4 py-2 bg-amarelo text-grafite-900 rounded-lg font-semibold text-sm hover:bg-amarelo/90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-                  >
-                    {cnpjLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Search className="w-4 h-4" />
-                    )}
-                    Buscar
-                  </button>
-                </div>
-                {cnpjError && (
-                  <p className="text-red-400 text-xs mt-1">{cnpjError}</p>
-                )}
-                {cnpjSuccess && (
-                  <p className="text-green-400 text-xs mt-1">
-                    Dados preenchidos - {cnpjSuccess}
-                  </p>
-                )}
+              {/* Client Mode Selector */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, clientMode: 'registered' }))}
+                  className={`p-3 rounded-lg border-2 text-center transition-all ${
+                    form.clientMode === 'registered'
+                      ? 'border-amarelo bg-amarelo/10 text-amarelo'
+                      : 'border-grafite-600 bg-grafite-800 text-gray-400 hover:border-grafite-500'
+                  }`}
+                >
+                  <Building2 className="w-5 h-5 mx-auto mb-1" />
+                  <div className="text-sm font-bold">Cliente Cadastrado</div>
+                  <div className="text-xs mt-1 opacity-70">Selecione da lista</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, clientMode: 'quick', clientId: undefined }))}
+                  className={`p-3 rounded-lg border-2 text-center transition-all ${
+                    form.clientMode === 'quick'
+                      ? 'border-amarelo bg-amarelo/10 text-amarelo'
+                      : 'border-grafite-600 bg-grafite-800 text-gray-400 hover:border-grafite-500'
+                  }`}
+                >
+                  <Pencil className="w-5 h-5 mx-auto mb-1" />
+                  <div className="text-sm font-bold">Rapido</div>
+                  <div className="text-xs mt-1 opacity-70">Preencher manualmente</div>
+                </button>
               </div>
 
+              {/* Registered Client Selector */}
+              {form.clientMode === 'registered' && (
+                <div className="mb-4">
+                  <label className="label-field">Buscar Cliente</label>
+                  <div className="relative mb-2">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input
+                      type="text"
+                      className="input-field pl-10"
+                      placeholder="Buscar por nome, CNPJ ou e-mail..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                    />
+                  </div>
+                  {clients.length === 0 ? (
+                    <p className="text-sm text-gray-500">
+                      Nenhum cliente cadastrado.{' '}
+                      <a href="/clientes" className="text-amarelo hover:underline">
+                        Cadastrar cliente
+                      </a>
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {filteredClients.map((client) => {
+                        const isSelected = form.clientId === client.id
+                        return (
+                          <button
+                            key={client.id}
+                            type="button"
+                            onClick={() => loadClient(client.id)}
+                            className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-colors ${
+                              isSelected
+                                ? 'border-amarelo bg-amarelo/10'
+                                : 'border-grafite-700 bg-grafite-800 hover:border-grafite-500'
+                            }`}
+                          >
+                            <div className="w-10 h-10 rounded-full bg-grafite-700 flex items-center justify-center flex-shrink-0">
+                              <span className="text-sm font-bold text-gray-300">
+                                {client.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-200 truncate">
+                                {client.name}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {client.cnpj
+                                  ? formatCnpj(client.cnpj)
+                                  : client.email || client.phone || 'Sem CNPJ'}
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <span className="text-xs text-amarelo font-medium">Selecionado</span>
+                            )}
+                          </button>
+                        )
+                      })}
+                      {filteredClients.length === 0 && clientSearch && (
+                        <p className="text-sm text-gray-500 text-center py-2">Nenhum resultado</p>
+                      )}
+                    </div>
+                  )}
+                  {form.clientId && (
+                    <p className="text-xs text-green-400 mt-2">
+                      Cliente selecionado — dados preenchidos abaixo
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Quick CNPJ Search (only in quick mode) */}
+              {form.clientMode === 'quick' && (
+                <div className="mb-4">
+                  <label className="label-field flex items-center gap-1">
+                    <Building2 className="w-3.5 h-3.5" />
+                    CNPJ (auto preenchimento)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      className="input-field flex-1"
+                      value={form.clientCnpj}
+                      onChange={(e) => {
+                        updateField('clientCnpj', formatCnpj(e.target.value))
+                        setCnpjError('')
+                        setCnpjSuccess('')
+                      }}
+                      placeholder="00.000.000/0000-00"
+                      maxLength={18}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCnpjSearch}
+                      disabled={cnpjLoading || form.clientCnpj.replace(/\D/g, '').length !== 14}
+                      className="px-4 py-2 bg-amarelo text-grafite-900 rounded-lg font-semibold text-sm hover:bg-amarelo/90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                    >
+                      {cnpjLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Search className="w-4 h-4" />
+                      )}
+                      Buscar
+                    </button>
+                  </div>
+                  {cnpjError && (
+                    <p className="text-red-400 text-xs mt-1">{cnpjError}</p>
+                  )}
+                  {cnpjSuccess && (
+                    <p className="text-green-400 text-xs mt-1">
+                      Dados preenchidos - {cnpjSuccess}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Client fields (always visible, editable) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="label-field">Nome do Cliente *</label>
@@ -570,7 +726,8 @@ function BudgetFormPanel({
                 <div>
                   <label className="label-field">Telefone</label>
                   <input
-                    type="text"
+                    type="tel"
+                    inputMode="tel"
                     className="input-field"
                     value={form.clientPhone}
                     onChange={(e) => updateField('clientPhone', e.target.value)}
@@ -1127,6 +1284,7 @@ export default function ComercialPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [materials, setMaterials] = useState<Material[]>([])
   const [products, setProducts] = useState<ProductData[]>([])
+  const [clients, setClients] = useState<ClientData[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<BudgetForm>(emptyForm())
@@ -1137,16 +1295,18 @@ export default function ComercialPage() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [budgetsRes, employeesRes, materialsRes, productsRes] = await Promise.all([
+      const [budgetsRes, employeesRes, materialsRes, productsRes, clientsRes] = await Promise.all([
         fetch('/api/budgets'),
         fetch('/api/employees'),
         fetch('/api/materials'),
         fetch('/api/products'),
+        fetch('/api/clients'),
       ])
       if (budgetsRes.ok) setBudgets(await budgetsRes.json())
       if (employeesRes.ok) setEmployees(await employeesRes.json())
       if (materialsRes.ok) setMaterials(await materialsRes.json())
       if (productsRes.ok) setProducts(await productsRes.json())
+      if (clientsRes.ok) setClients(await clientsRes.json())
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
     }
@@ -1167,6 +1327,8 @@ export default function ComercialPage() {
       id: budget.id,
       productId: (budget as any).productId || undefined,
       productMode: (budget as any).productId ? 'catalog' : 'custom',
+      clientMode: (budget as any).clientId ? 'registered' : 'quick',
+      clientId: (budget as any).clientId || undefined,
       clientCnpj: budget.clientCnpj || '',
       clientName: budget.clientName,
       clientPhone: budget.clientPhone || '',
@@ -1209,6 +1371,7 @@ export default function ComercialPage() {
     const payload = {
       ...(form.id ? { id: form.id } : {}),
       productId: form.productMode === 'catalog' ? form.productId || null : null,
+      clientId: form.clientMode === 'registered' ? form.clientId || null : null,
       clientName: form.clientName,
       clientCnpj: form.clientCnpj,
       clientPhone: form.clientPhone,
@@ -1436,6 +1599,7 @@ export default function ComercialPage() {
           allEmployees={employees}
           materials={materials}
           products={products}
+          clients={clients}
           onSave={handleSave}
           onClose={() => setShowForm(false)}
           saving={saving}

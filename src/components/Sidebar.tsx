@@ -19,6 +19,7 @@ import {
   UserCog,
   LogOut,
   Map,
+  Building2,
 } from 'lucide-react'
 import { signOut } from 'next-auth/react'
 import { useTheme } from './ThemeProvider'
@@ -26,6 +27,7 @@ import { useTheme } from './ThemeProvider'
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/produtos', label: 'Produtos', icon: BoxIcon },
+  { href: '/clientes', label: 'Clientes', icon: Building2 },
   { href: '/comercial', label: 'Comercial', icon: Calculator },
   { href: '/producao', label: 'Producao', icon: Hammer },
   { href: '/suprimentos', label: 'Suprimentos', icon: Package },
