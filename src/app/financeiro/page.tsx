@@ -356,7 +356,7 @@ export default function FinanceiroPage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <h1 className="text-2xl font-bold text-gray-100">Financeiro</h1>
+      <h1 className="text-2xl font-bold text-gray-100">Controle Financeiro</h1>
 
       {error && (
         <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded-lg">

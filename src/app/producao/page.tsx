@@ -453,9 +453,9 @@ export default function ProducaoPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">Producao & Projetos</h1>
+          <h1 className="text-2xl font-bold text-gray-100">Producao e Projetos</h1>
           <p className="text-sm text-gray-400 mt-1">
-            Acompanhe o progresso dos projetos em producao
+            Acompanhe o andamento de cada projeto — do inicio ate a entrega
           </p>
         </div>
         <button

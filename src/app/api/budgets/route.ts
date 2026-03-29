@@ -186,8 +186,8 @@ export async function POST(request: NextRequest) {
       const project = await prisma.project.create({
         data: {
           budgetId: budget.id,
-          status: 'PENDENTE',
-          progress: 0,
+          status: type === 'VENDA' ? 'CONCLUIDO' : 'PENDENTE',
+          progress: type === 'VENDA' ? 100 : 0,
         },
       })
 
@@ -222,6 +222,18 @@ export async function POST(request: NextRequest) {
           },
         ],
       })
+
+      // For VENDA type: deduct items from stock
+      if (type === 'VENDA' && items && items.length > 0) {
+        for (const item of items) {
+          if (item.materialId) {
+            await prisma.material.update({
+              where: { id: item.materialId },
+              data: { stock: { decrement: item.quantity } },
+            })
+          }
+        }
+      }
     }
 
     return NextResponse.json(budget, { status: 201 })
@@ -366,11 +378,12 @@ export async function PUT(request: NextRequest) {
 
     // If status changed to APROVADO and no project exists, create project + financial entries
     if (status === 'APROVADO' && !existing.project) {
+      const budgetType = type || existing.type
       const project = await prisma.project.create({
         data: {
           budgetId: budget.id,
-          status: 'PENDENTE',
-          progress: 0,
+          status: budgetType === 'VENDA' ? 'CONCLUIDO' : 'PENDENTE',
+          progress: budgetType === 'VENDA' ? 100 : 0,
         },
       })
 
@@ -405,6 +418,18 @@ export async function PUT(request: NextRequest) {
           },
         ],
       })
+
+      // For VENDA type: deduct items from stock
+      if (budgetType === 'VENDA' && items && items.length > 0) {
+        for (const item of items) {
+          if (item.materialId) {
+            await prisma.material.update({
+              where: { id: item.materialId },
+              data: { stock: { decrement: item.quantity } },
+            })
+          }
+        }
+      }
     }
 
     return NextResponse.json(budget)

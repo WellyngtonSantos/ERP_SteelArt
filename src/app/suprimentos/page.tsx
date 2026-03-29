@@ -218,7 +218,7 @@ export default function SuprimentosPage() {
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-gray-100">
-          Suprimentos & Estoque
+          Estoque e Compras (Notas Fiscais)
         </h1>
         <div className="flex flex-col sm:flex-row gap-3">
           <input
@@ -304,6 +304,15 @@ export default function SuprimentosPage() {
               <span className="text-gray-200">{formatCurrency(importResult.invoice.totalAmount)}</span>
             </div>
           </div>
+          {/* Stock update summary */}
+          {(importResult as any).stockUpdated > 0 && (
+            <div className="mb-4 p-3 bg-green-900/30 border border-green-700/50 rounded-lg">
+              <p className="text-sm text-green-300 font-medium">
+                Estoque atualizado automaticamente para {(importResult as any).stockUpdated} material(is) vinculado(s).
+                As quantidades da nota foram somadas ao estoque atual.
+              </p>
+            </div>
+          )}
           {/* Import results table - desktop */}
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">

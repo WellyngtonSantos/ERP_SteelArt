@@ -98,19 +98,25 @@ export async function POST(request: NextRequest) {
       include: { items: true },
     })
 
-    // Update prices for matched materials
+    // Update prices and stock for matched materials
     for (const match of itemMatches) {
       if (match.matchedMaterial) {
         await prisma.material.update({
           where: { id: match.matchedMaterial.id },
-          data: { currentPrice: match.unitPrice },
+          data: {
+            currentPrice: match.unitPrice,
+            stock: { increment: match.quantity },
+          },
         })
       }
     }
 
+    const stockUpdated = itemMatches.filter((m) => m.matchedMaterial).length
+
     return NextResponse.json({
       invoice,
       nfData,
+      stockUpdated,
       matches: itemMatches.map((m) => ({
         description: m.description,
         quantity: m.quantity,
@@ -118,6 +124,7 @@ export async function POST(request: NextRequest) {
         matchedMaterialId: m.matchedMaterial?.id || null,
         matchedMaterialName: m.matchedMaterial?.name || null,
         matchScore: m.matchScore,
+        stockIncremented: !!m.matchedMaterial,
       })),
     }, { status: 201 })
   } catch (error: any) {

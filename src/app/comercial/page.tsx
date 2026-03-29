@@ -81,7 +81,7 @@ interface BudgetForm {
   clientPhone: string
   clientEmail: string
   clientAddress: string
-  type: 'PRODUTO' | 'SERVICO'
+  type: 'PRODUTO' | 'SERVICO' | 'VENDA'
   status: string
   ironCost: number
   paintCost: number
@@ -178,14 +178,17 @@ function AccordionSection({
     <div className="border border-grafite-700 rounded-lg overflow-hidden">
       <button
         type="button"
-        onClick={() => onToggle(isOpen ? '' : id)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-grafite-800 hover:bg-grafite-700 transition-colors text-left"
+        onPointerUp={(e) => {
+          e.stopPropagation()
+          onToggle(isOpen ? '' : id)
+        }}
+        className="w-full flex items-center justify-between px-4 py-4 bg-grafite-800 hover:bg-grafite-700 transition-colors text-left min-h-[48px]"
       >
         <span className="text-sm font-semibold text-gray-200">{title}</span>
         {isOpen ? (
-          <ChevronUp className="w-4 h-4 text-gray-400" />
+          <ChevronUp className="w-5 h-5 text-gray-400" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-gray-400" />
+          <ChevronDown className="w-5 h-5 text-gray-400" />
         )}
       </button>
       {isOpen && <div className="p-4 bg-grafite-900/50 space-y-4">{children}</div>}
@@ -438,10 +441,10 @@ function BudgetFormPanel({
   return (
     <div className="fixed inset-0 z-50 flex">
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/60" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/60 z-0" onClick={onClose} />
 
       {/* Slide-over panel */}
-      <div className="relative ml-auto w-full max-w-5xl bg-grafite-900 shadow-2xl flex flex-col overflow-hidden">
+      <div className="relative z-10 ml-auto w-full max-w-5xl bg-grafite-900 shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-grafite-700 bg-grafite-800 flex-shrink-0">
           <h2 className="text-lg font-bold text-gray-100">
@@ -453,11 +456,11 @@ function BudgetFormPanel({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto flex">
+        <div className="flex-1 overflow-hidden flex">
           {/* Form Left */}
-          <div className="flex-1 p-6 space-y-4 overflow-y-auto">
+          <div className="flex-1 p-6 space-y-4 overflow-y-auto overscroll-contain">
             {/* Product Selection */}
-            <Section id="product" title="Selecao de Produto">
+            <Section id="product" title="O que sera orcado? (Produto)">
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <button
                   type="button"
@@ -563,7 +566,7 @@ function BudgetFormPanel({
             </Section>
 
             {/* Client Info */}
-            <Section id="client" title="Dados do Cliente">
+            <Section id="client" title="Para quem e o orcamento? (Cliente)">
               {/* Client Mode Selector */}
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <button
@@ -758,30 +761,37 @@ function BudgetFormPanel({
             </Section>
 
             {/* Type Selector */}
-            <Section id="type" title="Tipo do Orcamento">
-              <div className="grid grid-cols-2 gap-4">
-                {(['PRODUTO', 'SERVICO'] as const).map((t) => (
+            <Section id="type" title="Qual o tipo? (Fabricacao, Servico ou Venda)">
+              <div className="grid grid-cols-3 gap-3">
+                {([
+                  { key: 'PRODUTO' as const, label: 'Fabricacao', desc: 'Fabricar pecas, estruturas ou chales' },
+                  { key: 'SERVICO' as const, label: 'Servico', desc: 'Instalacao, reparo ou manutencao' },
+                  { key: 'VENDA' as const, label: 'Venda de Produtos', desc: 'Vender itens do estoque (sem fabricacao)' },
+                ]).map((t) => (
                   <button
-                    key={t}
+                    key={t.key}
                     type="button"
-                    onClick={() => updateField('type', t)}
+                    onClick={() => updateField('type', t.key)}
                     className={`p-4 rounded-lg border-2 text-center transition-all ${
-                      form.type === t
+                      form.type === t.key
                         ? 'border-amarelo bg-amarelo/10 text-amarelo'
                         : 'border-grafite-600 bg-grafite-800 text-gray-400 hover:border-grafite-500'
                     }`}
                   >
-                    <div className="text-sm font-bold">{t === 'PRODUTO' ? 'Produto' : 'Servico'}</div>
-                    <div className="text-xs mt-1 opacity-70">
-                      {t === 'PRODUTO' ? 'Fabricacao de pecas e estruturas' : 'Servico de instalacao ou reparo'}
-                    </div>
+                    <div className="text-sm font-bold">{t.label}</div>
+                    <div className="text-xs mt-1 opacity-70">{t.desc}</div>
                   </button>
                 ))}
               </div>
+              {form.type === 'VENDA' && (
+                <p className="text-xs text-amarelo/80 mt-2">
+                  Na venda de produtos, os itens serao descontados do estoque ao aprovar o orcamento.
+                </p>
+              )}
             </Section>
 
-            {/* Costs */}
-            <Section id="costs" title="Custos Base">
+            {/* Costs - hidden for VENDA type */}
+            {form.type !== 'VENDA' && <Section id="costs" title="Custos de Material (Ferro, Pintura, etc)">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="label-field">Custo de Ferro (R$)</label>
@@ -812,10 +822,10 @@ function BudgetFormPanel({
                   </div>
                 </div>
               </div>
-            </Section>
+            </Section>}
 
             {/* Margins */}
-            <Section id="margins" title="Margens">
+            <Section id="margins" title="Lucro, Impostos e Margem de Seguranca">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="label-field">
@@ -842,7 +852,7 @@ function BudgetFormPanel({
                 </div>
                 <div>
                   <label className="label-field">
-                    Margem de Casualidade: {formatPercent(form.casualtyMargin)}
+                    Margem de Seguranca (Imprevistos): {formatPercent(form.casualtyMargin)}
                   </label>
                   <input
                     type="range"
@@ -889,8 +899,8 @@ function BudgetFormPanel({
               </div>
             </Section>
 
-            {/* Employee Allocation */}
-            <Section id="employees" title="Alocacao de Funcionarios">
+            {/* Employee Allocation - hidden for VENDA type */}
+            {form.type !== 'VENDA' && <Section id="employees" title="Quem vai trabalhar? (Mao de Obra)">
               {form.employees.length === 0 ? (
                 <p className="text-sm text-gray-500">Carregando funcionarios...</p>
               ) : (
@@ -947,10 +957,10 @@ function BudgetFormPanel({
                   })}
                 </div>
               )}
-            </Section>
+            </Section>}
 
             {/* Budget Items */}
-            <Section id="items" title="Itens do Orcamento">
+            <Section id="items" title={form.type === 'VENDA' ? 'Produtos para Venda (serao descontados do estoque)' : 'Lista de Itens e Materiais'}>
               <div className="space-y-3">
                 {form.items.map((item, index) => (
                   <div
@@ -1018,7 +1028,7 @@ function BudgetFormPanel({
             </Section>
 
             {/* Payment Config */}
-            <Section id="payment" title="Configuracao de Pagamento">
+            <Section id="payment" title="Como o cliente vai pagar? (Parcelas)">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label-field">Entrada (%)</label>
@@ -1081,12 +1091,12 @@ function BudgetFormPanel({
             </Section>
 
             {/* Images */}
-            <Section id="images" title="Imagens de Referencia">
+            <Section id="images" title="Fotos e Imagens de Referencia">
               <BudgetImageUpload form={form} setForm={setForm} />
             </Section>
 
             {/* Notes */}
-            <Section id="notes" title="Observacoes">
+            <Section id="notes" title="Observacoes e Anotacoes">
               <textarea
                 className="input-field min-h-[100px] resize-y"
                 value={form.notes}
@@ -1099,17 +1109,17 @@ function BudgetFormPanel({
           {/* Calculation Summary Panel (Right) */}
           <div className="w-72 border-l border-grafite-700 bg-grafite-800 p-4 flex-shrink-0 overflow-y-auto">
             <h3 className="text-sm font-bold text-amarelo uppercase tracking-wider mb-4">
-              Resumo do Calculo
+              Resumo de Valores
             </h3>
             <div className="space-y-3">
-              <SummaryRow label="Custo Materiais" value={calculation.custoMateriais} />
-              <SummaryRow label="Custo Mao de Obra" value={calculation.custoMaoDeObra} />
-              <SummaryRow label="Custo Pintura" value={form.paintCost} />
+              <SummaryRow label="Materiais e Itens" value={calculation.custoMateriais} />
+              <SummaryRow label="Mao de Obra" value={calculation.custoMaoDeObra} />
+              <SummaryRow label="Pintura" value={form.paintCost} />
               <div className="border-t border-grafite-600 pt-3">
-                <SummaryRow label="Custo Base" value={calculation.custoBase} highlight />
+                <SummaryRow label="Total de Custos" value={calculation.custoBase} highlight />
               </div>
               <SummaryRow
-                label={`Casualidade (${formatPercent(form.casualtyMargin)})`}
+                label={`Seguranca/Imprevistos (${formatPercent(form.casualtyMargin)})`}
                 value={calculation.custoComCausalidade - calculation.custoBase}
               />
               <SummaryRow
@@ -1121,7 +1131,7 @@ function BudgetFormPanel({
                 value={calculation.imposto}
               />
               <div className="border-t border-amarelo/30 pt-3">
-                <SummaryRow label="PRECO FINAL" value={calculation.precoFinal} highlight big />
+                <SummaryRow label="VALOR FINAL P/ CLIENTE" value={calculation.precoFinal} highlight big />
               </div>
             </div>
 
@@ -1334,7 +1344,7 @@ export default function ComercialPage() {
       clientPhone: budget.clientPhone || '',
       clientEmail: budget.clientEmail || '',
       clientAddress: budget.clientAddress || '',
-      type: budget.type as 'PRODUTO' | 'SERVICO',
+      type: budget.type as 'PRODUTO' | 'SERVICO' | 'VENDA',
       status: budget.status,
       ironCost: budget.ironCost,
       paintCost: budget.paintCost,
@@ -1447,9 +1457,9 @@ export default function ComercialPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">Comercial & Orcamentacao</h1>
+          <h1 className="text-2xl font-bold text-gray-100">Orcamentos e Vendas</h1>
           <p className="text-sm text-gray-400 mt-1">
-            Gerencie orcamentos e propostas comerciais
+            Crie orcamentos para fabricacao, servicos ou venda de produtos do estoque
           </p>
         </div>
         <button onClick={openNewBudget} className="btn-primary flex items-center gap-2">
@@ -1475,8 +1485,8 @@ export default function ComercialPage() {
           onChange={(e) => setFilterStatus(e.target.value)}
         >
           <option value="ALL">Todos os Status</option>
-          <option value="RASCUNHO">Rascunho</option>
-          <option value="ENVIADO">Enviado</option>
+          <option value="RASCUNHO">Rascunho (em elaboracao)</option>
+          <option value="ENVIADO">Enviado ao cliente</option>
           <option value="APROVADO">Aprovado</option>
           <option value="REJEITADO">Rejeitado</option>
         </select>
@@ -1526,7 +1536,7 @@ export default function ComercialPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-xs px-2 py-1 rounded bg-grafite-700 text-gray-300">
-                        {budget.type === 'PRODUTO' ? 'Produto' : 'Servico'}
+                        {budget.type === 'PRODUTO' ? 'Fabricacao' : budget.type === 'VENDA' ? 'Venda' : 'Servico'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -1565,7 +1575,7 @@ export default function ComercialPage() {
                   <div>
                     <h3 className="font-medium text-gray-200">{budget.clientName}</h3>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      {budget.type === 'PRODUTO' ? 'Produto' : 'Servico'} -{' '}
+                      {budget.type === 'PRODUTO' ? 'Fabricacao' : budget.type === 'VENDA' ? 'Venda' : 'Servico'} -{' '}
                       {new Date(budget.createdAt).toLocaleDateString('pt-BR')}
                     </p>
                   </div>

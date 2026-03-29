@@ -191,7 +191,7 @@ export default function RHPage() {
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-100">RH & Equipe</h1>
+        <h1 className="text-2xl font-bold text-gray-100">Equipe e Custos de Mao de Obra</h1>
         <button onClick={openAddModal} className="btn-primary flex items-center gap-2 p-2 sm:px-4 sm:py-2">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

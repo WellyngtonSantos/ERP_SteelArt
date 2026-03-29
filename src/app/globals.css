@@ -6,6 +6,10 @@
   body {
     @apply bg-grafite-950 text-gray-100;
   }
+  /* Fix iPad/iPhone: remove 300ms tap delay and prevent double-tap zoom on interactive elements */
+  button, a, input, select, textarea, label, [role="button"] {
+    touch-action: manipulation;
+  }
 }
 
 @layer components {

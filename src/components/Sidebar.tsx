@@ -25,13 +25,13 @@ import { signOut } from 'next-auth/react'
 import { useTheme } from './ThemeProvider'
 
 const navItems = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/produtos', label: 'Produtos', icon: BoxIcon },
+  { href: '/', label: 'Painel Geral', icon: LayoutDashboard },
+  { href: '/produtos', label: 'Catalogo de Produtos', icon: BoxIcon },
   { href: '/clientes', label: 'Clientes', icon: Building2 },
-  { href: '/comercial', label: 'Comercial', icon: Calculator },
-  { href: '/producao', label: 'Producao', icon: Hammer },
-  { href: '/suprimentos', label: 'Suprimentos', icon: Package },
-  { href: '/rh', label: 'RH', icon: Users },
+  { href: '/comercial', label: 'Orcamentos e Vendas', icon: Calculator },
+  { href: '/producao', label: 'Producao e Projetos', icon: Hammer },
+  { href: '/suprimentos', label: 'Estoque e Compras', icon: Package },
+  { href: '/rh', label: 'Equipe e Custos', icon: Users },
   { href: '/financeiro', label: 'Financeiro', icon: DollarSign },
   { href: '/configuracoes', label: 'Configuracoes', icon: Settings },
   { href: '/mapa', label: 'Mapa do Sistema', icon: Map },
