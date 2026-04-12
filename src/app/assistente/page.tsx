@@ -1,13 +1,23 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Bot, Send, Sparkles, AlertTriangle, AlertCircle, CheckCircle2, Info, User } from 'lucide-react'
-import { QUICK_QUESTIONS, IntentId, IntentResponse, IntentItem } from '@/lib/ai/types'
+import { Bot, Send, Sparkles, AlertTriangle, AlertCircle, CheckCircle2, Info, User, Lock, Lightbulb } from 'lucide-react'
+import {
+  QUICK_QUESTIONS,
+  IntentId,
+  IntentResponse,
+  IntentItem,
+  ANALYSIS_PREVIEWS,
+  ANALYSIS_CATEGORIES,
+  AnalysisCategory,
+  AnalysisPreview,
+} from '@/lib/ai/types'
 
 type ChatMessage =
   | { id: string; role: 'user'; text: string }
   | { id: string; role: 'assistant'; kind: 'text'; text: string }
   | { id: string; role: 'assistant'; kind: 'intent'; data: IntentResponse }
+  | { id: string; role: 'assistant'; kind: 'preview'; preview: AnalysisPreview }
   | { id: string; role: 'assistant'; kind: 'loading' }
 
 function highlightClasses(h?: IntentItem['highlight']) {
@@ -49,6 +59,7 @@ export default function AssistentePage() {
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [activeCategory, setActiveCategory] = useState<AnalysisCategory>('estoque')
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -104,6 +115,14 @@ export default function AssistentePage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  function showPreview(preview: AnalysisPreview) {
+    setMessages((prev) => [
+      ...prev,
+      { id: nextId(), role: 'user', text: preview.question },
+      { id: nextId(), role: 'assistant', kind: 'preview', preview },
+    ])
   }
 
   function handleFreeText(e: React.FormEvent) {
@@ -163,6 +182,28 @@ export default function AssistentePage() {
 
               {m.role === 'assistant' && m.kind === 'text' && (
                 <p className="text-sm text-gray-200 whitespace-pre-wrap">{m.text}</p>
+              )}
+
+              {m.role === 'assistant' && m.kind === 'preview' && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Lock className="w-3.5 h-3.5 text-purple-400" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-purple-400">
+                      Preview — disponivel com IA conectada
+                    </span>
+                  </div>
+                  <p className="text-sm font-semibold text-gray-100">{m.preview.question}</p>
+                  <p className="text-xs text-gray-400">{m.preview.description}</p>
+                  <div className="px-3 py-2.5 rounded-lg border border-purple-500/30 bg-purple-500/5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-400 mb-1">
+                      Exemplo de resposta
+                    </p>
+                    <p className="text-sm text-gray-200 italic">{m.preview.example}</p>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Esta analise ficara disponivel quando a integracao com IA avancada for ativada.
+                  </p>
+                </div>
               )}
 
               {m.role === 'assistant' && m.kind === 'intent' && (
@@ -225,6 +266,60 @@ export default function AssistentePage() {
             >
               <p className="text-sm font-medium text-gray-100">{q.label}</p>
               <p className="text-xs text-gray-400 mt-0.5">{q.description}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Analises avancadas (preview) */}
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <Lightbulb className="w-4 h-4 text-purple-400" />
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            Analises avancadas
+          </p>
+          <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+            Em breve com IA
+          </span>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">
+          Preview das analises inteligentes que estarao disponiveis com a IA conectada. Clique para ver exemplo do que sera entregue.
+        </p>
+
+        {/* Category tabs */}
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {ANALYSIS_CATEGORIES.map((cat) => {
+            const active = activeCategory === cat.id
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors border"
+                style={{
+                  backgroundColor: active ? cat.color + '20' : 'transparent',
+                  borderColor: active ? cat.color + '60' : '#3f3f46',
+                  color: active ? cat.color : '#9ca3af',
+                }}
+              >
+                {cat.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {ANALYSIS_PREVIEWS.filter((p) => p.category === activeCategory).map((p) => (
+            <button
+              key={p.id}
+              onClick={() => showPreview(p)}
+              className="text-left p-3 rounded-lg border border-grafite-700 bg-grafite-800/30 hover:bg-grafite-800 hover:border-purple-500/40 transition-colors relative"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-medium text-gray-100 flex-1">{p.question}</p>
+                <Lock className="w-3 h-3 text-purple-400/60 flex-shrink-0 mt-1" />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">{p.description}</p>
             </button>
           ))}
         </div>
