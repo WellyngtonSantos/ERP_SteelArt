@@ -15,8 +15,22 @@ export async function POST() {
       return NextResponse.json({ error: 'Seed ja foi executado.' }, { status: 403 })
     }
 
-    const adminPassword = await hash('admin123', 12)
-    const vendedorPassword = await hash('vendedor123', 12)
+    // Senhas precisam vir do ambiente — nao manter defaults no codigo publico.
+    // Minimo de 12 caracteres para evitar seed com senhas fracas.
+    const adminPlain = process.env.SEED_ADMIN_PASSWORD
+    const vendedorPlain = process.env.SEED_VENDEDOR_PASSWORD
+    if (!adminPlain || adminPlain.length < 12 || !vendedorPlain || vendedorPlain.length < 12) {
+      return NextResponse.json(
+        {
+          error:
+            'Defina SEED_ADMIN_PASSWORD e SEED_VENDEDOR_PASSWORD (minimo 12 caracteres) antes de executar o seed.',
+        },
+        { status: 400 }
+      )
+    }
+
+    const adminPassword = await hash(adminPlain, 12)
+    const vendedorPassword = await hash(vendedorPlain, 12)
 
     const admin = await prisma.user.create({
       data: { name: 'Administrador', email: 'admin@metalgestao.com', password: adminPassword, role: 'ADMIN' },
