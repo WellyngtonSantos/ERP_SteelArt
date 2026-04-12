@@ -29,6 +29,9 @@ import {
   Shield,
   Search,
   Building2,
+  Bot,
+  Sparkles,
+  MessageSquare,
 } from 'lucide-react'
 
 interface Feature {
@@ -147,6 +150,22 @@ const sections: SystemSection[] = [
       { name: 'Custos Fixos', description: 'Gestao de aluguel, energia, internet, contador e outros', icon: PiggyBank },
       { name: 'Configuracao de Impostos', description: 'ISS e ICMS com aliquotas por tipo (produto/servico)', icon: Receipt },
       { name: 'Parcelas Automaticas', description: 'Entrada e entrega criadas ao aprovar orcamento', icon: DollarSign },
+    ],
+  },
+  {
+    id: 'assistente',
+    name: 'Assistente IA',
+    description: 'Braco direito de gestao com perguntas rapidas sobre o negocio',
+    href: '/assistente',
+    icon: Bot,
+    color: '#a855f7',
+    features: [
+      { name: 'Orcamentos Aguardando Resposta', description: 'Lista os orcamentos enviados ha mais de 7 dias sem retorno do cliente', icon: FileText },
+      { name: 'Clientes Inativos', description: 'Identifica clientes sem orcamento ha 60+ dias para retomada comercial', icon: Users },
+      { name: 'Estoque Critico', description: 'Mostra materiais abaixo do estoque minimo e estimativa de reposicao', icon: Package },
+      { name: 'Resumo Financeiro do Mes', description: 'Panorama de receitas, despesas, saldo previsto e contas em atraso', icon: DollarSign },
+      { name: 'Chat com Perguntas Rapidas', description: 'Interface de conversa com botoes de perguntas pre-definidas', icon: MessageSquare },
+      { name: 'Base Pronta para IA Avancada', description: 'Arquitetura preparada para integracao futura com IA conversacional completa', icon: Sparkles },
     ],
   },
   {

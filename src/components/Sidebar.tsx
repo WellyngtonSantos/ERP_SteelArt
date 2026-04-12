@@ -20,6 +20,7 @@ import {
   LogOut,
   Map,
   Building2,
+  Bot,
 } from 'lucide-react'
 import { signOut } from 'next-auth/react'
 import { useTheme } from './ThemeProvider'
@@ -33,6 +34,7 @@ const navItems = [
   { href: '/suprimentos', label: 'Estoque e Compras', icon: Package },
   { href: '/rh', label: 'Equipe e Custos', icon: Users },
   { href: '/financeiro', label: 'Financeiro', icon: DollarSign },
+  { href: '/assistente', label: 'Assistente IA', icon: Bot },
   { href: '/configuracoes', label: 'Configuracoes', icon: Settings },
   { href: '/mapa', label: 'Mapa do Sistema', icon: Map },
 ]
