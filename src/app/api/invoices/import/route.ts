@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { parseNFXml } from '@/lib/xml-parser'
 import { requireAuth, requireAllowedPage } from '@/lib/auth'
+import { enforceRateLimit, ValidationError, apiErrorResponse } from '@/lib/api-helpers'
 
 export async function POST(request: NextRequest) {
-  const { error } = await requireAllowedPage('/suprimentos')
+  const { error, session } = await requireAllowedPage('/suprimentos')
   if (error) return error
+
+  const userId = (session!.user as any).id as string | undefined
+  const blocked = enforceRateLimit(request, 'invoices:import', 10, 60 * 1000, userId)
+  if (blocked) return blocked
 
   try {
     const body = await request.json()
@@ -16,7 +21,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const nfData = parseNFXml(body.xml)
+    let nfData
+    try {
+      nfData = parseNFXml(body.xml)
+    } catch (parseErr) {
+      // Erros do parser sao especificos e seguros de mostrar ao usuario.
+      throw new ValidationError(
+        parseErr instanceof Error ? parseErr.message : 'XML de NF-e invalido'
+      )
+    }
 
     // Check if invoice already imported
     const existing = await prisma.invoice.findFirst({
@@ -127,12 +140,8 @@ export async function POST(request: NextRequest) {
         stockIncremented: !!m.matchedMaterial,
       })),
     }, { status: 201 })
-  } catch (error: any) {
-    console.error('Erro ao importar NF:', error)
-    return NextResponse.json(
-      { error: error.message || 'Erro ao importar NF' },
-      { status: 500 }
-    )
+  } catch (error) {
+    return apiErrorResponse(error, 'Erro ao importar NF', 'Erro ao importar NF:')
   }
 }
 

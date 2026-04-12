@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth, requireAllowedPage } from '@/lib/auth'
+import { enforceRateLimit, totalImagesSize } from '@/lib/api-helpers'
+
+const MAX_TOTAL_IMAGES_BYTES = 10 * 1024 * 1024 // 10MB agregado por produto
 
 export async function GET() {
   const { error } = await requireAuth()
@@ -19,8 +22,12 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { error } = await requireAllowedPage('/produtos')
+  const { error, session } = await requireAllowedPage('/produtos')
   if (error) return error
+
+  const userId = (session!.user as any).id as string | undefined
+  const blocked = enforceRateLimit(request, 'products:write', 30, 60 * 1000, userId)
+  if (blocked) return blocked
 
   try {
     const formData = await request.formData()
@@ -56,6 +63,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const joinedImages = imageDataUris.length > 0 ? imageDataUris.join('|||') : null
+    if (totalImagesSize(joinedImages) > MAX_TOTAL_IMAGES_BYTES) {
+      return NextResponse.json({ error: 'Total de imagens excede 10MB por produto' }, { status: 400 })
+    }
+
     const product = await prisma.product.create({
       data: {
         name,
@@ -64,7 +76,7 @@ export async function POST(request: NextRequest) {
         ironCost,
         paintCost,
         defaultMargin,
-        images: imageDataUris.length > 0 ? imageDataUris.join('|||') : null,
+        images: joinedImages,
       },
     })
 
@@ -76,8 +88,12 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const { error } = await requireAllowedPage('/produtos')
+  const { error, session } = await requireAllowedPage('/produtos')
   if (error) return error
+
+  const userId = (session!.user as any).id as string | undefined
+  const blocked = enforceRateLimit(request, 'products:write', 30, 60 * 1000, userId)
+  if (blocked) return blocked
 
   try {
     const formData = await request.formData()
@@ -123,6 +139,11 @@ export async function PUT(request: NextRequest) {
     // Merge existing images with new ones
     const keepImages = existingImages ? existingImages.split('|||').filter(Boolean) : []
     const allImages = [...keepImages, ...newImageDataUris]
+    const joinedImages = allImages.length > 0 ? allImages.join('|||') : null
+
+    if (totalImagesSize(joinedImages) > MAX_TOTAL_IMAGES_BYTES) {
+      return NextResponse.json({ error: 'Total de imagens excede 10MB por produto' }, { status: 400 })
+    }
 
     const product = await prisma.product.update({
       where: { id },
@@ -133,7 +154,7 @@ export async function PUT(request: NextRequest) {
         ironCost,
         paintCost,
         defaultMargin,
-        images: allImages.length > 0 ? allImages.join('|||') : null,
+        images: joinedImages,
       },
     })
 

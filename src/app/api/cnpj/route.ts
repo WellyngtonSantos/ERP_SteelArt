@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
+import { enforceRateLimit } from '@/lib/api-helpers'
 
 function createTimeout(ms: number): AbortSignal {
   const controller = new AbortController()
@@ -88,8 +89,13 @@ async function fetchReceitaWS(cnpj: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const { error } = await requireAuth()
+  const { error, session } = await requireAuth()
   if (error) return error
+
+  // 20 consultas por minuto por usuario — protege BrasilAPI/ReceitaWS contra abuso.
+  const userId = (session!.user as any).id as string | undefined
+  const blocked = enforceRateLimit(request, 'cnpj', 20, 60 * 1000, userId)
+  if (blocked) return blocked
 
   const cnpj = request.nextUrl.searchParams.get('cnpj')
 

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { calcOrcamento, calcValorHora } from '@/lib/calculations'
 import { requireAuth, requireAllowedPage } from '@/lib/auth'
+import { enforceRateLimit, totalImagesSize, ValidationError, apiErrorResponse } from '@/lib/api-helpers'
+
+const MAX_TOTAL_IMAGES_BYTES = 10 * 1024 * 1024 // 10MB agregado por orcamento
 
 async function parseRequestBody(request: NextRequest) {
   const contentType = request.headers.get('content-type') || ''
@@ -18,9 +21,9 @@ async function parseRequestBody(request: NextRequest) {
     const files = formData.getAll('images') as File[]
     for (const file of files) {
       if (file.size > 0) {
-        if (file.size > MAX_IMAGE_SIZE) throw new Error('Imagem muito grande (max 5MB)')
+        if (file.size > MAX_IMAGE_SIZE) throw new ValidationError('Imagem muito grande (max 5MB)')
         const mimeType = file.type || 'image/jpeg'
-        if (!ALLOWED_TYPES.includes(mimeType)) throw new Error('Tipo de imagem nao permitido')
+        if (!ALLOWED_TYPES.includes(mimeType)) throw new ValidationError('Tipo de imagem nao permitido')
         const bytes = await file.arrayBuffer()
         const buffer = Buffer.from(bytes)
         const base64 = buffer.toString('base64')
@@ -32,6 +35,10 @@ async function parseRequestBody(request: NextRequest) {
     const existingImages = body.existingImages ? body.existingImages.split('|||').filter(Boolean) : []
     body.images = [...existingImages, ...imageDataUris].join('|||') || null
     delete body.existingImages
+
+    if (totalImagesSize(body.images) > MAX_TOTAL_IMAGES_BYTES) {
+      throw new ValidationError('Total de imagens excede 10MB por orcamento')
+    }
     return body
   }
 
@@ -40,6 +47,9 @@ async function parseRequestBody(request: NextRequest) {
   if (body.existingImages !== undefined) {
     body.images = body.existingImages || null
     delete body.existingImages
+  }
+  if (totalImagesSize(body.images) > MAX_TOTAL_IMAGES_BYTES) {
+    throw new Error('Total de imagens excede 10MB por orcamento')
   }
   return body
 }
@@ -67,8 +77,12 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { error } = await requireAllowedPage('/comercial')
+  const { error, session } = await requireAllowedPage('/comercial')
   if (error) return error
+
+  const userId = (session!.user as any).id as string | undefined
+  const blocked = enforceRateLimit(request, 'budgets:write', 30, 60 * 1000, userId)
+  if (blocked) return blocked
 
   try {
     const body = await parseRequestBody(request)
@@ -238,14 +252,17 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(budget, { status: 201 })
   } catch (error) {
-    console.error('Error creating budget:', error)
-    return NextResponse.json({ error: 'Erro ao criar orcamento' }, { status: 500 })
+    return apiErrorResponse(error, 'Erro ao criar orcamento', 'Error creating budget:')
   }
 }
 
 export async function PUT(request: NextRequest) {
-  const { error } = await requireAllowedPage('/comercial')
+  const { error, session } = await requireAllowedPage('/comercial')
   if (error) return error
+
+  const userId = (session!.user as any).id as string | undefined
+  const blocked = enforceRateLimit(request, 'budgets:write', 30, 60 * 1000, userId)
+  if (blocked) return blocked
 
   try {
     const body = await parseRequestBody(request)
@@ -434,7 +451,6 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json(budget)
   } catch (error) {
-    console.error('Error updating budget:', error)
-    return NextResponse.json({ error: 'Erro ao atualizar orcamento' }, { status: 500 })
+    return apiErrorResponse(error, 'Erro ao atualizar orcamento', 'Error updating budget:')
   }
 }

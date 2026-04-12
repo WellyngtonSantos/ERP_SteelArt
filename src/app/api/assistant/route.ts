@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAllowedPage } from '@/lib/auth'
 import { getAIProvider } from '@/lib/ai/factory'
 import { isIntentId } from '@/lib/ai/intents/registry'
+import { enforceRateLimit } from '@/lib/api-helpers'
 
 export async function POST(req: NextRequest) {
-  const { error } = await requireAllowedPage('/assistente')
+  const { error, session } = await requireAllowedPage('/assistente')
   if (error) return error
+
+  // Limite agressivo pra proteger custo da IA quando Anthropic estiver ativo.
+  const userId = (session!.user as any).id as string | undefined
+  const blocked = enforceRateLimit(req, 'assistant', 20, 60 * 1000, userId)
+  if (blocked) return blocked
 
   try {
     const body = await req.json()
