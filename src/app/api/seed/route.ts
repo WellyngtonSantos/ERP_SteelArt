@@ -4,10 +4,15 @@ import { hash } from 'bcryptjs'
 
 export async function POST() {
   try {
-    // Only allow seed if no users exist (initial setup)
+    // Gate duplo: ENABLE_SEED precisa estar ativo E nao pode existir usuario no banco.
+    // Em producao normal, ENABLE_SEED fica desligado (ou ausente) e a rota retorna 403.
+    if (process.env.ENABLE_SEED !== 'true') {
+      return NextResponse.json({ error: 'Seed desabilitado neste ambiente.' }, { status: 403 })
+    }
+
     const userCount = await prisma.user.count()
     if (userCount > 0) {
-      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
+      return NextResponse.json({ error: 'Seed ja foi executado.' }, { status: 403 })
     }
 
     const adminPassword = await hash('admin123', 12)

@@ -19,14 +19,21 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
+            // unsafe-inline em script-src e style-src permanece por ora: Next.js usa
+            // scripts inline para hidratacao (__NEXT_DATA__) e o tema dinamico aplica
+            // styles inline (ex: cor primaria do sidebar). Migrar para CSP nonce-based
+            // e trabalho separado.
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+              "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob:",
               "font-src 'self' data:",
               "connect-src 'self'",
               "frame-ancestors 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "object-src 'none'",
             ].join('; '),
           },
         ],
