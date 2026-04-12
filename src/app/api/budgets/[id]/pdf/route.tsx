@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { calcOrcamento, calcValorHora } from '@/lib/calculations'
+import { requireAllowedPage } from '@/lib/auth'
 import React from 'react'
 import { Document, Page, Text, View, StyleSheet, Image, renderToBuffer } from '@react-pdf/renderer'
 
@@ -477,6 +478,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const { error } = await requireAllowedPage('/comercial')
+  if (error) return error
+
   try {
     const budget = await prisma.budget.findUnique({
       where: { id: params.id },

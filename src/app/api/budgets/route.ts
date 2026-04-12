@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { calcOrcamento, calcValorHora } from '@/lib/calculations'
-import { requireAuth } from '@/lib/auth'
+import { requireAuth, requireAllowedPage } from '@/lib/auth'
 
 async function parseRequestBody(request: NextRequest) {
   const contentType = request.headers.get('content-type') || ''
@@ -67,7 +67,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { error } = await requireAuth()
+  const { error } = await requireAllowedPage('/comercial')
   if (error) return error
 
   try {
@@ -244,7 +244,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const { error } = await requireAuth()
+  const { error } = await requireAllowedPage('/comercial')
   if (error) return error
 
   try {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth'
+import { requireAuth, requireAllowedPage } from '@/lib/auth'
 
 export async function GET(
   request: NextRequest,
@@ -48,7 +48,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await requireAuth()
+  const { error } = await requireAllowedPage('/rh')
   if (error) return error
 
   try {

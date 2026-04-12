@@ -103,3 +103,34 @@ export async function requireAdmin() {
   }
   return { error: null, session }
 }
+
+// Helper: require the authenticated user to have access to a given page path.
+// Admin bypassa (vê tudo). Se allowedPages vazio → sem restricoes (default).
+// Usar em rotas de API que pertencem a uma tela especifica (ex: /api/employees → /rh).
+export async function requireAllowedPage(pagePath: string) {
+  const { error, session } = await requireAuth()
+  if (error) return { error, session: null }
+
+  const user = session!.user as any
+  if (user.role === 'ADMIN') return { error: null, session }
+
+  let allowedPages: string[] = []
+  try {
+    const raw = user.allowedPages
+    allowedPages = raw ? JSON.parse(raw) : []
+  } catch {
+    allowedPages = []
+  }
+
+  // Lista vazia = sem restricoes (comportamento historico — compat com usuarios ja cadastrados)
+  if (allowedPages.length === 0) return { error: null, session }
+
+  if (!allowedPages.includes(pagePath)) {
+    return {
+      error: NextResponse.json({ error: 'Acesso negado a este recurso' }, { status: 403 }),
+      session: null,
+    }
+  }
+
+  return { error: null, session }
+}

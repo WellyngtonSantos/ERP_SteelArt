@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { requireAllowedPage } from '@/lib/auth'
 import { getAIProvider } from '@/lib/ai/factory'
 import { isIntentId } from '@/lib/ai/intents/registry'
 
 export async function POST(req: NextRequest) {
-  const { error } = await requireAuth()
+  const { error } = await requireAllowedPage('/assistente')
   if (error) return error
 
   try {

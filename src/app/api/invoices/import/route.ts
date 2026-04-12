@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { parseNFXml } from '@/lib/xml-parser'
-import { requireAuth } from '@/lib/auth'
+import { requireAuth, requireAllowedPage } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
-  const { error } = await requireAuth()
+  const { error } = await requireAllowedPage('/suprimentos')
   if (error) return error
 
   try {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth'
+import { requireAuth, requireAllowedPage } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   const { error } = await requireAuth()
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const { error } = await requireAuth()
+  const { error } = await requireAllowedPage('/financeiro')
   if (error) return error
 
   try {
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const { error } = await requireAuth()
+  const { error } = await requireAllowedPage('/financeiro')
   if (error) return error
 
   try {

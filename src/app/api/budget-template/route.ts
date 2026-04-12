@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth'
+import { requireAuth, requireAllowedPage } from '@/lib/auth'
 
 async function getOrCreateTemplate() {
   let template = await prisma.budgetTemplate.findFirst()
@@ -24,7 +24,7 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
-  const { error } = await requireAuth()
+  const { error } = await requireAllowedPage('/configuracoes')
   if (error) return error
 
   try {
