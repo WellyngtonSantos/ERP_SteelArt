@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { calcOrcamento, calcValorHora } from '@/lib/calculations'
+import { calcOrcamento, calcOrcamentoOperacional, calcValorHora } from '@/lib/calculations'
 import { requireAuth, requireAllowedPage } from '@/lib/auth'
 import { enforceRateLimit, totalImagesSize, ValidationError, apiErrorResponse } from '@/lib/api-helpers'
 
@@ -63,6 +63,8 @@ export async function GET() {
       include: {
         items: { include: { material: true } },
         employees: { include: { employee: true } },
+        payments: { orderBy: { order: 'asc' } },
+        configuratorPicks: { orderBy: { order: 'asc' } },
         project: true,
         product: true,
         client: true,
@@ -107,6 +109,11 @@ export async function POST(request: NextRequest) {
       images,
       items,
       employees,
+      modoCalculo,
+      diasExecucao,
+      custoOperacionalDia,
+      payments,
+      picks,
     } = body
 
     // Calculate material costs from items
@@ -134,14 +141,35 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const calc = calcOrcamento({
-      custoMateriais,
-      custoMaoDeObra,
-      custoPintura: paintCost || 0,
-      margemLucro: profitMargin || 20,
-      margemCausalidade: casualtyMargin || 5,
-      aliquotaImposto: taxRate || 0,
-    })
+    // Soma picks do configurador ao custoMateriais e dias
+    const custoPicks = (picks || []).reduce(
+      (s: number, p: { unitPrice: number; quantity?: number }) => s + (p.unitPrice || 0) * (p.quantity ?? 1),
+      0
+    )
+    const diasPicks = (picks || []).reduce(
+      (s: number, p: { tempoDias: number; quantity?: number }) => s + (p.tempoDias || 0) * (p.quantity ?? 1),
+      0
+    )
+    const custoMateriaisTotal = custoMateriais + custoPicks
+
+    const isOperacional = modoCalculo === 'OPERACIONAL'
+    const calc = isOperacional
+      ? calcOrcamentoOperacional({
+          custoOperacionalDia: custoOperacionalDia || 0,
+          diasExecucao: (diasExecucao || 0) + diasPicks,
+          custoMateriais: custoMateriaisTotal,
+          margemLucro: profitMargin || 20,
+          margemCausalidade: casualtyMargin || 5,
+          aliquotaImposto: taxRate || 0,
+        })
+      : calcOrcamento({
+          custoMateriais: custoMateriaisTotal,
+          custoMaoDeObra,
+          custoPintura: paintCost || 0,
+          margemLucro: profitMargin || 20,
+          margemCausalidade: casualtyMargin || 5,
+          aliquotaImposto: taxRate || 0,
+        })
 
     const budget = await prisma.budget.create({
       data: {
@@ -163,6 +191,9 @@ export async function POST(request: NextRequest) {
         totalCost: calc.custoBase,
         totalPrice: calc.precoFinal,
         taxRate: taxRate || 0,
+        modoCalculo: isOperacional ? 'OPERACIONAL' : 'MANUAL',
+        diasExecucao: diasExecucao || 0,
+        custoOperacionalDia: isOperacional ? (custoOperacionalDia || 0) : 0,
         notes: notes || null,
         images: images || null,
         items: {
@@ -209,33 +240,54 @@ export async function POST(request: NextRequest) {
       const deliveryDate = new Date(now)
       deliveryDate.setDate(deliveryDate.getDate() + 30)
 
-      const entryAmount = calc.precoFinal * ((entryPercent || 50) / 100)
-      const deliveryAmount = calc.precoFinal * ((deliveryPercent || 50) / 100)
-
-      await prisma.financialEntry.createMany({
-        data: [
-          {
-            type: 'RECEITA',
-            category: 'PARCELA',
-            description: `Entrada - ${clientName}`,
-            amount: entryAmount,
-            dueDate: now,
-            status: 'PENDENTE',
-            budgetId: budget.id,
-            projectId: project.id,
-          },
-          {
-            type: 'RECEITA',
-            category: 'PARCELA',
-            description: `Entrega - ${clientName}`,
-            amount: deliveryAmount,
-            dueDate: deliveryDate,
-            status: 'PENDENTE',
-            budgetId: budget.id,
-            projectId: project.id,
-          },
-        ],
-      })
+      // Gera FinancialEntries a partir dos payments (pagamento misto) ou fallback para entryPercent/deliveryPercent
+      const hasPayments = Array.isArray(payments) && payments.length > 0
+      if (hasPayments) {
+        await prisma.financialEntry.createMany({
+          data: payments.map((p: { method: string; amount: number; taxRate?: number; dueOffset?: number }, idx: number) => {
+            const dueDate = new Date(now)
+            dueDate.setDate(dueDate.getDate() + (p.dueOffset || 0))
+            const total = (p.amount || 0) * (1 + (p.taxRate || 0) / 100)
+            return {
+              type: 'RECEITA',
+              category: 'PARCELA',
+              description: `Parcela ${idx + 1} (${p.method}) - ${clientName}`,
+              amount: total,
+              dueDate,
+              status: 'PENDENTE',
+              budgetId: budget.id,
+              projectId: project.id,
+            }
+          }),
+        })
+      } else {
+        const entryAmount = calc.precoFinal * ((entryPercent || 50) / 100)
+        const deliveryAmount = calc.precoFinal * ((deliveryPercent || 50) / 100)
+        await prisma.financialEntry.createMany({
+          data: [
+            {
+              type: 'RECEITA',
+              category: 'PARCELA',
+              description: `Entrada - ${clientName}`,
+              amount: entryAmount,
+              dueDate: now,
+              status: 'PENDENTE',
+              budgetId: budget.id,
+              projectId: project.id,
+            },
+            {
+              type: 'RECEITA',
+              category: 'PARCELA',
+              description: `Entrega - ${clientName}`,
+              amount: deliveryAmount,
+              dueDate: deliveryDate,
+              status: 'PENDENTE',
+              budgetId: budget.id,
+              projectId: project.id,
+            },
+          ],
+        })
+      }
 
       // For VENDA type: deduct items from stock
       if (type === 'VENDA' && items && items.length > 0) {
@@ -288,6 +340,11 @@ export async function PUT(request: NextRequest) {
       images,
       items,
       employees,
+      modoCalculo,
+      diasExecucao,
+      custoOperacionalDia,
+      payments,
+      picks,
     } = body
 
     if (!id) {
@@ -327,18 +384,41 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    const calc = calcOrcamento({
-      custoMateriais,
-      custoMaoDeObra,
-      custoPintura: paintCost || 0,
-      margemLucro: profitMargin || 20,
-      margemCausalidade: casualtyMargin || 5,
-      aliquotaImposto: taxRate || 0,
-    })
+    // Soma picks do configurador ao custoMateriais e dias
+    const custoPicks = (picks || []).reduce(
+      (s: number, p: { unitPrice: number; quantity?: number }) => s + (p.unitPrice || 0) * (p.quantity ?? 1),
+      0
+    )
+    const diasPicks = (picks || []).reduce(
+      (s: number, p: { tempoDias: number; quantity?: number }) => s + (p.tempoDias || 0) * (p.quantity ?? 1),
+      0
+    )
+    const custoMateriaisTotal = custoMateriais + custoPicks
 
-    // Delete old items and employees, then recreate
+    const isOperacional = modoCalculo === 'OPERACIONAL'
+    const calc = isOperacional
+      ? calcOrcamentoOperacional({
+          custoOperacionalDia: custoOperacionalDia || 0,
+          diasExecucao: (diasExecucao || 0) + diasPicks,
+          custoMateriais: custoMateriaisTotal,
+          margemLucro: profitMargin || 20,
+          margemCausalidade: casualtyMargin || 5,
+          aliquotaImposto: taxRate || 0,
+        })
+      : calcOrcamento({
+          custoMateriais: custoMateriaisTotal,
+          custoMaoDeObra,
+          custoPintura: paintCost || 0,
+          margemLucro: profitMargin || 20,
+          margemCausalidade: casualtyMargin || 5,
+          aliquotaImposto: taxRate || 0,
+        })
+
+    // Delete old items, employees, payments, picks, then recreate
     await prisma.budgetItem.deleteMany({ where: { budgetId: id } })
     await prisma.budgetEmployee.deleteMany({ where: { budgetId: id } })
+    await prisma.budgetPayment.deleteMany({ where: { budgetId: id } })
+    await prisma.budgetConfiguratorPick.deleteMany({ where: { budgetId: id } })
 
     const budget = await prisma.budget.update({
       where: { id },
@@ -361,6 +441,9 @@ export async function PUT(request: NextRequest) {
         totalCost: calc.custoBase,
         totalPrice: calc.precoFinal,
         taxRate: taxRate || 0,
+        modoCalculo: isOperacional ? 'OPERACIONAL' : 'MANUAL',
+        diasExecucao: diasExecucao || 0,
+        custoOperacionalDia: isOperacional ? (custoOperacionalDia || 0) : 0,
         notes: notes || null,
         images: images !== undefined ? (images || null) : undefined,
         items: {
@@ -386,10 +469,36 @@ export async function PUT(request: NextRequest) {
             })
           ),
         },
+        payments: {
+          create: (payments || []).map(
+            (p: { method: string; amount: number; taxRate?: number; dueOffset?: number; order?: number }, idx: number) => ({
+              method: p.method || 'DINHEIRO',
+              amount: parseFloat(String(p.amount)) || 0,
+              taxRate: parseFloat(String(p.taxRate ?? 0)) || 0,
+              dueOffset: parseInt(String(p.dueOffset ?? 0), 10) || 0,
+              order: p.order ?? idx,
+            })
+          ),
+        },
+        configuratorPicks: {
+          create: (picks || []).map(
+            (p: { optionId?: string; optionName: string; categoryName: string; unitPrice: number; tempoDias: number; quantity?: number }, idx: number) => ({
+              optionId: p.optionId || null,
+              optionName: p.optionName,
+              categoryName: p.categoryName,
+              unitPrice: parseFloat(String(p.unitPrice)) || 0,
+              tempoDias: parseFloat(String(p.tempoDias)) || 0,
+              quantity: parseFloat(String(p.quantity ?? 1)) || 1,
+              order: idx,
+            })
+          ),
+        },
       },
       include: {
         items: { include: { material: true } },
         employees: { include: { employee: true } },
+        payments: { orderBy: { order: 'asc' } },
+        configuratorPicks: { orderBy: { order: 'asc' } },
       },
     })
 
@@ -408,33 +517,53 @@ export async function PUT(request: NextRequest) {
       const deliveryDate = new Date(now)
       deliveryDate.setDate(deliveryDate.getDate() + 30)
 
-      const entryAmount = calc.precoFinal * ((entryPercent || 50) / 100)
-      const deliveryAmount = calc.precoFinal * ((deliveryPercent || 50) / 100)
-
-      await prisma.financialEntry.createMany({
-        data: [
-          {
-            type: 'RECEITA',
-            category: 'PARCELA',
-            description: `Entrada - ${clientName}`,
-            amount: entryAmount,
-            dueDate: now,
-            status: 'PENDENTE',
-            budgetId: budget.id,
-            projectId: project.id,
-          },
-          {
-            type: 'RECEITA',
-            category: 'PARCELA',
-            description: `Entrega - ${clientName}`,
-            amount: deliveryAmount,
-            dueDate: deliveryDate,
-            status: 'PENDENTE',
-            budgetId: budget.id,
-            projectId: project.id,
-          },
-        ],
-      })
+      const hasPayments = Array.isArray(payments) && payments.length > 0
+      if (hasPayments) {
+        await prisma.financialEntry.createMany({
+          data: payments.map((p: { method: string; amount: number; taxRate?: number; dueOffset?: number }, idx: number) => {
+            const dueDate = new Date(now)
+            dueDate.setDate(dueDate.getDate() + (p.dueOffset || 0))
+            const total = (p.amount || 0) * (1 + (p.taxRate || 0) / 100)
+            return {
+              type: 'RECEITA',
+              category: 'PARCELA',
+              description: `Parcela ${idx + 1} (${p.method}) - ${clientName}`,
+              amount: total,
+              dueDate,
+              status: 'PENDENTE',
+              budgetId: budget.id,
+              projectId: project.id,
+            }
+          }),
+        })
+      } else {
+        const entryAmount = calc.precoFinal * ((entryPercent || 50) / 100)
+        const deliveryAmount = calc.precoFinal * ((deliveryPercent || 50) / 100)
+        await prisma.financialEntry.createMany({
+          data: [
+            {
+              type: 'RECEITA',
+              category: 'PARCELA',
+              description: `Entrada - ${clientName}`,
+              amount: entryAmount,
+              dueDate: now,
+              status: 'PENDENTE',
+              budgetId: budget.id,
+              projectId: project.id,
+            },
+            {
+              type: 'RECEITA',
+              category: 'PARCELA',
+              description: `Entrega - ${clientName}`,
+              amount: deliveryAmount,
+              dueDate: deliveryDate,
+              status: 'PENDENTE',
+              budgetId: budget.id,
+              projectId: project.id,
+            },
+          ],
+        })
+      }
 
       // For VENDA type: deduct items from stock
       if (budgetType === 'VENDA' && items && items.length > 0) {

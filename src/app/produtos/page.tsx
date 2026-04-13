@@ -28,6 +28,8 @@ interface Product {
   ironCost: number
   paintCost: number
   defaultMargin: number
+  tempoProducaoDias: number
+  tempoMontagemDias: number
   images?: string
   createdAt: string
 }
@@ -40,6 +42,8 @@ interface ProductForm {
   ironCost: number
   paintCost: number
   defaultMargin: number
+  tempoProducaoDias: number
+  tempoMontagemDias: number
   existingImages: string[]
   newImages: File[]
 }
@@ -51,6 +55,8 @@ const emptyForm = (): ProductForm => ({
   ironCost: 0,
   paintCost: 0,
   defaultMargin: 20,
+  tempoProducaoDias: 0,
+  tempoMontagemDias: 0,
   existingImages: [],
   newImages: [],
 })
@@ -96,6 +102,8 @@ export default function ProdutosPage() {
       ironCost: product.ironCost,
       paintCost: product.paintCost,
       defaultMargin: product.defaultMargin,
+      tempoProducaoDias: product.tempoProducaoDias || 0,
+      tempoMontagemDias: product.tempoMontagemDias || 0,
       existingImages,
       newImages: [],
     })
@@ -115,6 +123,8 @@ export default function ProdutosPage() {
     formData.append('ironCost', String(form.ironCost))
     formData.append('paintCost', String(form.paintCost))
     formData.append('defaultMargin', String(form.defaultMargin))
+    formData.append('tempoProducaoDias', String(form.tempoProducaoDias))
+    formData.append('tempoMontagemDias', String(form.tempoMontagemDias))
     formData.append('existingImages', form.existingImages.join('|||'))
 
     for (const file of form.newImages) {
@@ -348,11 +358,16 @@ export default function ProdutosPage() {
                   </div>
 
                   {/* Materials count & cost */}
-                  <div className="flex items-center gap-4 text-sm">
+                  <div className="flex items-center gap-4 text-sm flex-wrap">
                     <span className="text-gray-400">
                       {materials.length} {materials.length === 1 ? 'material' : 'materiais'}
                     </span>
                     <span className="text-gray-400">Margem: {product.defaultMargin}%</span>
+                    {(product.tempoProducaoDias > 0 || product.tempoMontagemDias > 0) && (
+                      <span className="text-amarelo text-xs">
+                        {product.tempoProducaoDias + product.tempoMontagemDias}d exec
+                      </span>
+                    )}
                   </div>
 
                   {/* Cost breakdown mini */}
@@ -528,6 +543,49 @@ export default function ProdutosPage() {
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Tempo de producao e montagem */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-200 mb-1">Tempo de Execucao</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  Usado pelo orcamento pra calcular o custo operacional (dias da empresa aberta × custo/dia).
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="label-field">Tempo de Producao Interna (dias)</label>
+                    <input
+                      type="number"
+                      className="input-field"
+                      value={form.tempoProducaoDias || ''}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, tempoProducaoDias: parseFloat(e.target.value) || 0 }))
+                      }
+                      min="0"
+                      step="0.5"
+                      placeholder="Ex: 5"
+                    />
+                  </div>
+                  <div>
+                    <label className="label-field">Tempo de Montagem Externa (dias)</label>
+                    <input
+                      type="number"
+                      className="input-field"
+                      value={form.tempoMontagemDias || ''}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, tempoMontagemDias: parseFloat(e.target.value) || 0 }))
+                      }
+                      min="0"
+                      step="0.5"
+                      placeholder="Ex: 2"
+                    />
+                  </div>
+                </div>
+                {(form.tempoProducaoDias > 0 || form.tempoMontagemDias > 0) && (
+                  <p className="text-xs text-amarelo mt-2">
+                    Total: {form.tempoProducaoDias + form.tempoMontagemDias} dias
+                  </p>
+                )}
               </div>
 
               {/* Materials */}

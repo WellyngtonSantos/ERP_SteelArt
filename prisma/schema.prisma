@@ -24,7 +24,8 @@ model Employee {
   id          String              @id @default(cuid())
   name        String
   role        String
-  monthlyCost Float               // Salario + beneficios
+  dailyCost   Float               @default(0) // Salario diario — fonte da verdade p/ folha
+  monthlyCost Float               // Legado: mantido e calculado como dailyCost * 22 (22 dias uteis) p/ compat
   benefits    Float               @default(0)
   active      Boolean             @default(true)
   createdAt   DateTime            @default(now())
@@ -59,18 +60,20 @@ model Material {
 }
 
 model Product {
-  id            String   @id @default(cuid())
-  name          String
-  description   String?
-  materialsJson String   @default("[]") // JSON array of {description, quantity, unitPrice}
-  ironCost      Float    @default(0)
-  paintCost     Float    @default(0)
-  defaultMargin Float    @default(20)
-  images        String?  // comma-separated paths
-  active        Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  budgets       Budget[]
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  materialsJson     String   @default("[]") // JSON array of {description, quantity, unitPrice}
+  ironCost          Float    @default(0)
+  paintCost         Float    @default(0)
+  defaultMargin     Float    @default(20)
+  tempoProducaoDias Float    @default(0) // Dias estimados de fabricacao interna
+  tempoMontagemDias Float    @default(0) // Dias estimados de montagem externa
+  images            String?  // comma-separated paths
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  budgets           Budget[]
 }
 
 model Client {
@@ -109,16 +112,35 @@ model Budget {
   totalCost      Float            @default(0)
   totalPrice     Float            @default(0)
   taxRate        Float            @default(0)
+  // Modo de calculo: OPERACIONAL (custoOperacionalDia * diasExecucao + materiais) ou MANUAL (ferro + pintura + mao-de-obra)
+  modoCalculo    String           @default("MANUAL")
+  diasExecucao   Float            @default(0) // Total de dias (producao + montagem)
+  custoOperacionalDia Float       @default(0) // Snapshot do custo/dia no momento do orcamento
   notes          String?
   images         String?          // comma-separated paths
   createdById    String?
   createdBy      User?            @relation(fields: [createdById], references: [id])
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
-  items          BudgetItem[]
-  employees      BudgetEmployee[]
-  project        Project?
+  items            BudgetItem[]
+  employees        BudgetEmployee[]
+  payments         BudgetPayment[]
+  configuratorPicks BudgetConfiguratorPick[]
+  project          Project?
   financialEntries FinancialEntry[]
+}
+
+// Parcelas do orcamento — permite misturar formas de pagamento, cada uma com imposto/taxa propria
+model BudgetPayment {
+  id        String   @id @default(cuid())
+  budgetId  String
+  budget    Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  method    String   // DINHEIRO, PIX, BOLETO, CARTAO, CHEQUE, OUTROS
+  amount    Float    // Valor base da parcela (sem impostos adicionais)
+  taxRate   Float    @default(0) // % de imposto/taxa sobre esta parcela
+  dueOffset Int      @default(0) // Dias apos a criacao do orcamento para vencimento
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
 }
 
 model BudgetItem {
@@ -156,20 +178,39 @@ model Project {
 }
 
 model FinancialEntry {
-  id          String   @id @default(cuid())
-  type        String   // RECEITA, DESPESA
-  category    String   // PARCELA, FORNECEDOR, CUSTO_FIXO, VALE, OUTROS
-  description String
-  amount      Float
-  dueDate     DateTime
-  paidDate    DateTime?
-  status      String   @default("PENDENTE") // PENDENTE, PAGO, ATRASADO
-  budgetId    String?
-  budget      Budget?  @relation(fields: [budgetId], references: [id])
-  projectId   String?
-  project     Project? @relation(fields: [projectId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String    @id @default(cuid())
+  code           String?   @unique // Ex: DSP-2026-0001, RCB-2026-0001 — rastreavel humano
+  type           String    // RECEITA, DESPESA
+  category       String    // Classificacao do sistema: PARCELA, FORNECEDOR, CUSTO_FIXO, VALE, OUTROS
+  description    String
+  amount         Float
+  dueDate        DateTime
+  paidDate       DateTime?
+  status         String    @default("PENDENTE") // PENDENTE, PAGO, ATRASADO
+  attachmentData String?   // Boleto anexo (base64 data URI PDF ou imagem)
+  attachmentName String?   // Nome original do arquivo do boleto
+  bankName       String?   // Banco onde foi pago (gerenciado em Configuracoes)
+  categoryName   String?   // Categoria user-defined (gerenciada em Configuracoes)
+  groupName      String?   // Agrupador user-defined (gerenciado em Configuracoes)
+  budgetId       String?
+  budget         Budget?   @relation(fields: [budgetId], references: [id])
+  projectId      String?
+  project        Project?  @relation(fields: [projectId], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// Opcoes configuraveis para lancamentos financeiros (bancos, categorias, agrupadores)
+model FinancialOption {
+  id        String   @id @default(cuid())
+  type      String   // BANK, CATEGORY, GROUP
+  name      String
+  active    Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([type, name])
 }
 
 model FixedCost {
@@ -207,6 +248,48 @@ model BudgetTemplate {
   warrantyText    String?  // garantia
   validityDays    Int      @default(15)
   updatedAt       DateTime @updatedAt
+}
+
+// Configurador "Monte o seu" — categorias de opcoes (cobertura, revestimento, piso, opcionais...)
+model ConfiguratorCategory {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  description   String?
+  selectionType String   @default("SINGLE") // SINGLE (escolhe uma) ou MULTIPLE (pode escolher varias)
+  order         Int      @default(0)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  options       ConfiguratorOption[]
+}
+
+model ConfiguratorOption {
+  id          String   @id @default(cuid())
+  categoryId  String
+  category    ConfiguratorCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  unitPrice   Float    @default(0) // Custo adicional desta opcao
+  tempoDias   Float    @default(0) // Dias que esta opcao acrescenta na execucao
+  order       Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Snapshot das opcoes escolhidas em um orcamento (sem FK para nao quebrar ao excluir opcao)
+model BudgetConfiguratorPick {
+  id           String   @id @default(cuid())
+  budgetId     String
+  budget       Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  optionId     String?  // Referencia fraca (snapshot permanece se opcao for deletada)
+  optionName   String
+  categoryName String
+  unitPrice    Float
+  tempoDias    Float
+  quantity     Float    @default(1)
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
 }
 
 model Invoice {

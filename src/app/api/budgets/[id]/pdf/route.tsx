@@ -298,30 +298,22 @@ function OrcamentoPDF({
           </View>
         )}
 
-        {/* Items Table */}
+        {/* Items Table — apenas descricao e quantidade (sem precos para o cliente) */}
         {budget.items && budget.items.length > 0 && (
           <>
             <Text style={s.sectionTitle}>MATERIAIS E ITENS</Text>
             <View style={s.table}>
               <View style={s.tableHeader}>
-                <Text style={[s.tableHeaderText, { flex: 3 }]}>Descricao</Text>
+                <Text style={[s.tableHeaderText, { flex: 4 }]}>Descricao</Text>
                 <Text style={[s.tableHeaderText, { flex: 1, textAlign: 'center' }]}>Qtd</Text>
-                <Text style={[s.tableHeaderText, { flex: 1, textAlign: 'right' }]}>Unitario</Text>
-                <Text style={[s.tableHeaderText, { flex: 1, textAlign: 'right' }]}>Total</Text>
               </View>
               {budget.items.map((item: any, i: number) => (
                 <View key={item.id} style={i % 2 === 0 ? s.tableRow : s.tableRowAlt}>
-                  <Text style={[s.tableCell, { flex: 3 }]}>
+                  <Text style={[s.tableCell, { flex: 4 }]}>
                     {item.material ? item.material.name : item.description}
                   </Text>
                   <Text style={[s.tableCell, { flex: 1, textAlign: 'center' }]}>
                     {item.quantity}
-                  </Text>
-                  <Text style={[s.tableCell, { flex: 1, textAlign: 'right' }]}>
-                    {fmt(item.unitPrice)}
-                  </Text>
-                  <Text style={[s.tableCell, { flex: 1, textAlign: 'right' }]}>
-                    {fmt(item.quantity * item.unitPrice)}
                   </Text>
                 </View>
               ))}
@@ -329,79 +321,8 @@ function OrcamentoPDF({
           </>
         )}
 
-        {/* Employees */}
-        {budget.employees && budget.employees.length > 0 && (
-          <>
-            <Text style={s.sectionTitle}>MAO DE OBRA</Text>
-            <View style={s.table}>
-              <View style={s.tableHeader}>
-                <Text style={[s.tableHeaderText, { flex: 2 }]}>Funcionario</Text>
-                <Text style={[s.tableHeaderText, { flex: 1, textAlign: 'center' }]}>Funcao</Text>
-                <Text style={[s.tableHeaderText, { flex: 1, textAlign: 'center' }]}>Horas</Text>
-                <Text style={[s.tableHeaderText, { flex: 1, textAlign: 'right' }]}>Valor/h</Text>
-                <Text style={[s.tableHeaderText, { flex: 1, textAlign: 'right' }]}>Total</Text>
-              </View>
-              {budget.employees.map((be: any, i: number) => {
-                const valorHora = calcValorHora(be.employee.monthlyCost)
-                return (
-                  <View key={be.id} style={i % 2 === 0 ? s.tableRow : s.tableRowAlt}>
-                    <Text style={[s.tableCell, { flex: 2 }]}>{be.employee.name}</Text>
-                    <Text style={[s.tableCell, { flex: 1, textAlign: 'center' }]}>
-                      {be.employee.role}
-                    </Text>
-                    <Text style={[s.tableCell, { flex: 1, textAlign: 'center' }]}>
-                      {be.hoursAllocated}h
-                    </Text>
-                    <Text style={[s.tableCell, { flex: 1, textAlign: 'right' }]}>
-                      {fmt(valorHora)}
-                    </Text>
-                    <Text style={[s.tableCell, { flex: 1, textAlign: 'right' }]}>
-                      {fmt(valorHora * be.hoursAllocated)}
-                    </Text>
-                  </View>
-                )
-              })}
-            </View>
-          </>
-        )}
-
-        {/* Summary */}
+        {/* Valor Total — sem detalhar custos, margem, lucro ou impostos */}
         <View style={s.summaryBox}>
-          <Text style={[s.sectionTitle, { marginTop: 0, borderBottom: 'none' }]}>
-            RESUMO FINANCEIRO
-          </Text>
-          <View style={s.summaryRow}>
-            <Text style={s.summaryLabel}>Materiais:</Text>
-            <Text style={s.summaryValue}>{fmt(custoMateriais)}</Text>
-          </View>
-          <View style={s.summaryRow}>
-            <Text style={s.summaryLabel}>Mao de Obra:</Text>
-            <Text style={s.summaryValue}>{fmt(custoMaoDeObra)}</Text>
-          </View>
-          {budget.paintCost > 0 && (
-            <View style={s.summaryRow}>
-              <Text style={s.summaryLabel}>Pintura:</Text>
-              <Text style={s.summaryValue}>{fmt(budget.paintCost)}</Text>
-            </View>
-          )}
-          <View style={s.summaryRow}>
-            <Text style={s.summaryLabel}>Custo Base:</Text>
-            <Text style={s.summaryValue}>{fmt(calc.custoBase)}</Text>
-          </View>
-          <View style={s.summaryRow}>
-            <Text style={s.summaryLabel}>Casualidade ({budget.casualtyMargin}%):</Text>
-            <Text style={s.summaryValue}>{fmt(calc.custoComCausalidade - calc.custoBase)}</Text>
-          </View>
-          <View style={s.summaryRow}>
-            <Text style={s.summaryLabel}>Lucro ({budget.profitMargin}%):</Text>
-            <Text style={s.summaryValue}>{fmt(calc.lucro)}</Text>
-          </View>
-          {calc.imposto > 0 && (
-            <View style={s.summaryRow}>
-              <Text style={s.summaryLabel}>Impostos ({budget.taxRate}%):</Text>
-              <Text style={s.summaryValue}>{fmt(calc.imposto)}</Text>
-            </View>
-          )}
           <View style={s.totalRow}>
             <Text style={s.totalLabel}>VALOR TOTAL:</Text>
             <Text style={s.totalValue}>{fmt(calc.precoFinal)}</Text>

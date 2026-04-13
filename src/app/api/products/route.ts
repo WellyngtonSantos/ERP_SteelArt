@@ -37,6 +37,8 @@ export async function POST(request: NextRequest) {
     const ironCost = parseFloat(formData.get('ironCost') as string) || 0
     const paintCost = parseFloat(formData.get('paintCost') as string) || 0
     const defaultMargin = parseFloat(formData.get('defaultMargin') as string) || 20
+    const tempoProducaoDias = parseFloat(formData.get('tempoProducaoDias') as string) || 0
+    const tempoMontagemDias = parseFloat(formData.get('tempoMontagemDias') as string) || 0
 
     if (!name) {
       return NextResponse.json({ error: 'Nome obrigatorio' }, { status: 400 })
@@ -76,6 +78,8 @@ export async function POST(request: NextRequest) {
         ironCost,
         paintCost,
         defaultMargin,
+        tempoProducaoDias,
+        tempoMontagemDias,
         images: joinedImages,
       },
     })
@@ -104,6 +108,8 @@ export async function PUT(request: NextRequest) {
     const ironCost = parseFloat(formData.get('ironCost') as string) || 0
     const paintCost = parseFloat(formData.get('paintCost') as string) || 0
     const defaultMargin = parseFloat(formData.get('defaultMargin') as string) || 20
+    const tempoProducaoDias = parseFloat(formData.get('tempoProducaoDias') as string) || 0
+    const tempoMontagemDias = parseFloat(formData.get('tempoMontagemDias') as string) || 0
     const existingImages = formData.get('existingImages') as string | null
 
     if (!id || !name) {
@@ -154,6 +160,8 @@ export async function PUT(request: NextRequest) {
         ironCost,
         paintCost,
         defaultMargin,
+        tempoProducaoDias,
+        tempoMontagemDias,
         images: joinedImages,
       },
     })

@@ -5,6 +5,7 @@ import { formatCurrency } from '@/lib/calculations'
 
 interface FinancialEntry {
   id: string
+  code: string | null
   type: 'RECEITA' | 'DESPESA'
   category: string
   description: string
@@ -12,8 +13,21 @@ interface FinancialEntry {
   dueDate: string
   paidDate: string | null
   status: 'PENDENTE' | 'PAGO' | 'ATRASADO'
+  attachmentData: string | null
+  attachmentName: string | null
+  bankName: string | null
+  categoryName: string | null
+  groupName: string | null
   budgetId: string | null
   projectId: string | null
+}
+
+interface FinancialOption {
+  id: string
+  type: 'BANK' | 'CATEGORY' | 'GROUP'
+  name: string
+  active: boolean
+  order: number
 }
 
 interface FixedCost {
@@ -60,14 +74,33 @@ export default function FinanceiroPage() {
   const [entries, setEntries] = useState<FinancialEntry[]>([])
   const [fixedCosts, setFixedCosts] = useState<FixedCost[]>([])
   const [taxes, setTaxes] = useState<TaxConfig[]>([])
+  const [options, setOptions] = useState<FinancialOption[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('')
+  const _now = new Date()
+  const [mesFiltro, setMesFiltro] = useState<number>(_now.getMonth() + 1) // 1-12, 0 = todos
+  const [anoFiltro, setAnoFiltro] = useState<number>(_now.getFullYear())
+  const MESES_LABEL = ['Todos os meses', 'Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+  const anosDisponiveis = (() => {
+    const anoAtual = _now.getFullYear()
+    const anos: number[] = []
+    for (let a = anoAtual - 3; a <= anoAtual + 1; a++) anos.push(a)
+    return anos
+  })()
+
+  const matchesPeriodo = (entry: FinancialEntry) => {
+    const refDate = entry.paidDate ? new Date(entry.paidDate) : new Date(entry.dueDate)
+    if (refDate.getFullYear() !== anoFiltro) return false
+    if (mesFiltro !== 0 && refDate.getMonth() + 1 !== mesFiltro) return false
+    return true
+  }
 
   // Entry modal
   const [showEntryModal, setShowEntryModal] = useState(false)
+  const todayISO = () => new Date().toISOString().slice(0, 10)
   const [entryForm, setEntryForm] = useState({
     type: 'DESPESA' as string,
     category: '',
@@ -75,8 +108,16 @@ export default function FinanceiroPage() {
     amount: 0,
     dueDate: '',
     status: 'PENDENTE',
+    paidNow: false,
+    paidDate: '',
+    attachmentData: '' as string,
+    attachmentName: '' as string,
+    bankName: '' as string,
+    categoryName: '' as string,
+    groupName: '' as string,
   })
   const [savingEntry, setSavingEntry] = useState(false)
+  const [attachmentError, setAttachmentError] = useState('')
 
   // Fixed Cost modal
   const [showCostModal, setShowCostModal] = useState(false)
@@ -105,10 +146,11 @@ export default function FinanceiroPage() {
     setLoading(true)
     setError('')
     try {
-      const [entriesRes, costsRes, taxesRes] = await Promise.all([
+      const [entriesRes, costsRes, taxesRes, optionsRes] = await Promise.all([
         fetch('/api/financial'),
         fetch('/api/fixed-costs'),
         fetch('/api/taxes'),
+        fetch('/api/financial-options'),
       ])
       if (!entriesRes.ok) throw new Error('Erro ao carregar lancamentos')
       if (!costsRes.ok) throw new Error('Erro ao carregar custos fixos')
@@ -117,6 +159,9 @@ export default function FinanceiroPage() {
       setFixedCosts(await costsRes.json())
       if (taxesRes.ok) {
         setTaxes(await taxesRes.json())
+      }
+      if (optionsRes.ok) {
+        setOptions(await optionsRes.json())
       }
     } catch (err: any) {
       setError(err.message)
@@ -129,9 +174,10 @@ export default function FinanceiroPage() {
     fetchAll()
   }, [fetchAll])
 
-  // Computed values
-  const receitas = entries.filter((e) => e.type === 'RECEITA')
-  const despesas = entries.filter((e) => e.type === 'DESPESA')
+  // Computed values (ja filtrados por mes/ano)
+  const entriesPeriodo = entries.filter(matchesPeriodo)
+  const receitas = entriesPeriodo.filter((e) => e.type === 'RECEITA')
+  const despesas = entriesPeriodo.filter((e) => e.type === 'DESPESA')
   const totalReceber = receitas
     .filter((e) => e.status !== 'PAGO')
     .reduce((s, e) => s + e.amount, 0)
@@ -140,7 +186,7 @@ export default function FinanceiroPage() {
     .reduce((s, e) => s + e.amount, 0)
   const saldoProjetado = totalReceber - totalPagar
 
-  // Filter entries by status
+  // Filter entries by status (on top of periodo)
   const filteredReceitas = statusFilter
     ? receitas.filter((e) => e.status === statusFilter)
     : receitas
@@ -177,18 +223,72 @@ export default function FinanceiroPage() {
       amount: 0,
       dueDate: '',
       status: 'PENDENTE',
+      paidNow: false,
+      paidDate: '',
+      attachmentData: '',
+      attachmentName: '',
+      bankName: '',
+      categoryName: '',
+      groupName: '',
     })
+    setAttachmentError('')
     setShowEntryModal(true)
+  }
+
+  const banks = options.filter((o) => o.type === 'BANK' && o.active)
+  const categoryOpts = options.filter((o) => o.type === 'CATEGORY' && o.active)
+  const groupOpts = options.filter((o) => o.type === 'GROUP' && o.active)
+
+  const handleAttachmentChange = (file: File | null) => {
+    setAttachmentError('')
+    if (!file) {
+      setEntryForm((prev) => ({ ...prev, attachmentData: '', attachmentName: '' }))
+      return
+    }
+    const MAX = 3 * 1024 * 1024
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
+    if (!allowed.includes(file.type)) {
+      setAttachmentError('Tipo de arquivo nao suportado. Use PDF, JPG, PNG ou WEBP.')
+      return
+    }
+    if (file.size > MAX) {
+      setAttachmentError('Arquivo muito grande (maximo 3MB).')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setEntryForm((prev) => ({
+        ...prev,
+        attachmentData: reader.result as string,
+        attachmentName: file.name,
+      }))
+    }
+    reader.onerror = () => setAttachmentError('Erro ao ler o arquivo.')
+    reader.readAsDataURL(file)
   }
 
   const saveEntry = async () => {
     setSavingEntry(true)
     setError('')
     try {
+      const payload: any = {
+        type: entryForm.type,
+        category: entryForm.category,
+        description: entryForm.description,
+        amount: entryForm.amount,
+        dueDate: entryForm.dueDate,
+        status: entryForm.paidNow ? 'PAGO' : entryForm.status,
+        paidDate: entryForm.paidNow ? (entryForm.paidDate || todayISO()) : null,
+        attachmentData: entryForm.attachmentData || null,
+        attachmentName: entryForm.attachmentName || null,
+        bankName: entryForm.bankName || null,
+        categoryName: entryForm.categoryName || null,
+        groupName: entryForm.groupName || null,
+      }
       const res = await fetch('/api/financial', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entryForm),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -356,7 +456,30 @@ export default function FinanceiroPage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <h1 className="text-2xl font-bold text-gray-100">Controle Financeiro</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <h1 className="text-2xl font-bold text-gray-100">Controle Financeiro</h1>
+        <div className="flex items-center gap-2 bg-grafite-800 rounded-lg p-1">
+          <span className="text-xs text-gray-400 px-2">Periodo:</span>
+          <select
+            value={mesFiltro}
+            onChange={(e) => setMesFiltro(parseInt(e.target.value, 10))}
+            className="text-sm px-2 py-1.5 rounded-md bg-transparent border border-grafite-700 text-gray-200"
+          >
+            {MESES_LABEL.map((m, i) => (
+              <option key={i} value={i} className="bg-grafite-800">{m}</option>
+            ))}
+          </select>
+          <select
+            value={anoFiltro}
+            onChange={(e) => setAnoFiltro(parseInt(e.target.value, 10))}
+            className="text-sm px-2 py-1.5 rounded-md bg-transparent border border-grafite-700 text-gray-200"
+          >
+            {anosDisponiveis.map((a) => (
+              <option key={a} value={a} className="bg-grafite-800">{a}</option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {error && (
         <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded-lg">
@@ -432,6 +555,7 @@ export default function FinanceiroPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
+                  <th className="px-4 py-3 text-left">Codigo</th>
                   <th className="px-4 py-3 text-left">Vencimento</th>
                   <th className="px-4 py-3 text-left">Descricao</th>
                   <th className="px-4 py-3 text-left">Categoria</th>
@@ -444,18 +568,31 @@ export default function FinanceiroPage() {
               <tbody>
                 {filteredReceitas.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                       Nenhum lancamento encontrado.
                     </td>
                   </tr>
                 ) : (
                   filteredReceitas.map((entry) => (
                     <tr key={entry.id} className="table-row">
+                      <td className="px-4 py-3 font-mono text-xs text-gray-400">{entry.code || '-'}</td>
                       <td className="px-4 py-3">
                         {new Date(entry.dueDate).toLocaleDateString('pt-BR')}
                       </td>
-                      <td className="px-4 py-3 font-medium">{entry.description}</td>
-                      <td className="px-4 py-3 text-gray-400">{entry.category}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <div>{entry.description}</div>
+                        {(entry.bankName || entry.groupName) && (
+                          <div className="flex gap-1 mt-1 flex-wrap">
+                            {entry.bankName && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{entry.bankName}</span>
+                            )}
+                            {entry.groupName && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300">{entry.groupName}</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-400">{entry.categoryName || entry.category}</td>
                       <td className="px-4 py-3 text-right text-green-400">
                         {formatCurrency(entry.amount)}
                       </td>
@@ -470,14 +607,28 @@ export default function FinanceiroPage() {
                           : '-'}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {entry.status !== 'PAGO' && (
-                          <button
-                            onClick={() => markAsPaid(entry)}
-                            className="text-xs btn-secondary p-2"
-                          >
-                            Marcar como Pago
-                          </button>
-                        )}
+                        <div className="flex items-center justify-center gap-2">
+                          {entry.attachmentData && (
+                            <a
+                              href={entry.attachmentData}
+                              download={entry.attachmentName || 'boleto'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-amarelo hover:underline"
+                              title="Ver boleto"
+                            >
+                              Boleto
+                            </a>
+                          )}
+                          {entry.status !== 'PAGO' && (
+                            <button
+                              onClick={() => markAsPaid(entry)}
+                              className="text-xs btn-secondary p-2"
+                            >
+                              Marcar como Pago
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -492,6 +643,7 @@ export default function FinanceiroPage() {
             ) : (
               filteredReceitas.map((entry) => (
                 <div key={entry.id} className="bg-grafite-800 rounded-lg p-4 space-y-2">
+                  {entry.code && <p className="font-mono text-xs text-gray-500">{entry.code}</p>}
                   <div className="flex items-start justify-between">
                     <p className="font-medium text-gray-100">{entry.description}</p>
                     <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ml-2 ${STATUS_COLORS[entry.status]}`}>
@@ -547,6 +699,7 @@ export default function FinanceiroPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
+                  <th className="px-4 py-3 text-left">Codigo</th>
                   <th className="px-4 py-3 text-left">Vencimento</th>
                   <th className="px-4 py-3 text-left">Descricao</th>
                   <th className="px-4 py-3 text-left">Categoria</th>
@@ -559,18 +712,31 @@ export default function FinanceiroPage() {
               <tbody>
                 {filteredDespesas.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                       Nenhum lancamento encontrado.
                     </td>
                   </tr>
                 ) : (
                   filteredDespesas.map((entry) => (
                     <tr key={entry.id} className="table-row">
+                      <td className="px-4 py-3 font-mono text-xs text-gray-400">{entry.code || '-'}</td>
                       <td className="px-4 py-3">
                         {new Date(entry.dueDate).toLocaleDateString('pt-BR')}
                       </td>
-                      <td className="px-4 py-3 font-medium">{entry.description}</td>
-                      <td className="px-4 py-3 text-gray-400">{entry.category}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <div>{entry.description}</div>
+                        {(entry.bankName || entry.groupName) && (
+                          <div className="flex gap-1 mt-1 flex-wrap">
+                            {entry.bankName && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{entry.bankName}</span>
+                            )}
+                            {entry.groupName && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300">{entry.groupName}</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-400">{entry.categoryName || entry.category}</td>
                       <td className="px-4 py-3 text-right text-red-400">
                         {formatCurrency(entry.amount)}
                       </td>
@@ -585,14 +751,28 @@ export default function FinanceiroPage() {
                           : '-'}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {entry.status !== 'PAGO' && (
-                          <button
-                            onClick={() => markAsPaid(entry)}
-                            className="text-xs btn-secondary p-2"
-                          >
-                            Marcar como Pago
-                          </button>
-                        )}
+                        <div className="flex items-center justify-center gap-2">
+                          {entry.attachmentData && (
+                            <a
+                              href={entry.attachmentData}
+                              download={entry.attachmentName || 'boleto'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-amarelo hover:underline"
+                              title="Ver boleto"
+                            >
+                              Boleto
+                            </a>
+                          )}
+                          {entry.status !== 'PAGO' && (
+                            <button
+                              onClick={() => markAsPaid(entry)}
+                              className="text-xs btn-secondary p-2"
+                            >
+                              Marcar como Pago
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -607,6 +787,7 @@ export default function FinanceiroPage() {
             ) : (
               filteredDespesas.map((entry) => (
                 <div key={entry.id} className="bg-grafite-800 rounded-lg p-4 space-y-2">
+                  {entry.code && <p className="font-mono text-xs text-gray-500">{entry.code}</p>}
                   <div className="flex items-start justify-between">
                     <p className="font-medium text-gray-100">{entry.description}</p>
                     <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ml-2 ${STATUS_COLORS[entry.status]}`}>
@@ -986,6 +1167,106 @@ export default function FinanceiroPage() {
                   onChange={(e) => setEntryForm({ ...entryForm, dueDate: e.target.value })}
                   className="input-field"
                 />
+              </div>
+
+              {/* 3 selects configuraveis — gerenciados em Configuracoes > Financeiro */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="label-field">Banco (onde foi pago)</label>
+                  <select
+                    value={entryForm.bankName}
+                    onChange={(e) => setEntryForm({ ...entryForm, bankName: e.target.value })}
+                    className="select-field w-full"
+                    disabled={banks.length === 0}
+                  >
+                    <option value="">{banks.length === 0 ? 'Nenhum banco cadastrado' : 'Selecione...'}</option>
+                    {banks.map((b) => (
+                      <option key={b.id} value={b.name}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label-field">Categoria</label>
+                  <select
+                    value={entryForm.categoryName}
+                    onChange={(e) => setEntryForm({ ...entryForm, categoryName: e.target.value })}
+                    className="select-field w-full"
+                    disabled={categoryOpts.length === 0}
+                  >
+                    <option value="">{categoryOpts.length === 0 ? 'Nenhuma categoria cadastrada' : 'Selecione...'}</option>
+                    {categoryOpts.map((c) => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label-field">Agrupador</label>
+                  <select
+                    value={entryForm.groupName}
+                    onChange={(e) => setEntryForm({ ...entryForm, groupName: e.target.value })}
+                    className="select-field w-full"
+                    disabled={groupOpts.length === 0}
+                  >
+                    <option value="">{groupOpts.length === 0 ? 'Nenhum agrupador cadastrado' : 'Selecione...'}</option>
+                    {groupOpts.map((g) => (
+                      <option key={g.id} value={g.name}>{g.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {(banks.length === 0 || categoryOpts.length === 0 || groupOpts.length === 0) && (
+                <p className="text-xs text-gray-500">
+                  Dica: cadastre bancos, categorias e agrupadores em <a href="/configuracoes" className="text-amarelo hover:underline">Configuracoes &gt; Financeiro</a>.
+                </p>
+              )}
+
+              {/* Anexo do boleto (PDF ou imagem) */}
+              <div>
+                <label className="label-field">Anexar boleto (PDF ou imagem, max 3MB)</label>
+                <input
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                  onChange={(e) => handleAttachmentChange(e.target.files?.[0] || null)}
+                  className="input-field text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-grafite-700 file:text-gray-200 file:text-xs file:cursor-pointer"
+                />
+                {attachmentError && (
+                  <p className="text-xs text-red-400 mt-1">{attachmentError}</p>
+                )}
+                {entryForm.attachmentName && !attachmentError && (
+                  <p className="text-xs text-green-400 mt-1">
+                    Anexado: {entryForm.attachmentName}
+                  </p>
+                )}
+              </div>
+
+              {/* Ja paga? — evita ter que ir uma por uma depois marcando como pago */}
+              <div className="border-t border-grafite-700 pt-4">
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={entryForm.paidNow}
+                    onChange={(e) => setEntryForm({
+                      ...entryForm,
+                      paidNow: e.target.checked,
+                      paidDate: e.target.checked ? (entryForm.paidDate || todayISO()) : '',
+                    })}
+                    className="h-5 w-5 rounded bg-grafite-800 border-grafite-600 text-amarelo focus:ring-amarelo"
+                  />
+                  <span className="text-sm text-gray-200 font-medium">
+                    Ja foi paga — salvar direto como PAGO
+                  </span>
+                </label>
+                {entryForm.paidNow && (
+                  <div className="mt-3">
+                    <label className="label-field">Data do Pagamento</label>
+                    <input
+                      type="date"
+                      value={entryForm.paidDate}
+                      onChange={(e) => setEntryForm({ ...entryForm, paidDate: e.target.value })}
+                      className="input-field"
+                    />
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">

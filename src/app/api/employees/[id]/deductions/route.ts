@@ -55,8 +55,8 @@ export async function POST(
     const { id } = params
     const body = await request.json()
 
-    // Validate type
-    const validTypes = ['ALMOCO', 'ADIANTAMENTO', 'EPI', 'OUTROS']
+    // Validate type. FALTA = dia inteiro, MEIO_PERIODO = metade do dia.
+    const validTypes = ['ALMOCO', 'MARMITA', 'VALE', 'ADIANTAMENTO', 'EPI', 'FALTA', 'MEIO_PERIODO', 'OUTROS']
     if (!validTypes.includes(body.type)) {
       return NextResponse.json(
         { error: 'Tipo de deducao invalido' },
@@ -64,11 +64,24 @@ export async function POST(
       )
     }
 
+    // Para FALTA e MEIO_PERIODO, amount e calculado a partir do dailyCost atual do funcionario
+    let amount = parseFloat(body.amount) || 0
+    if (body.type === 'FALTA' || body.type === 'MEIO_PERIODO') {
+      const employee = await prisma.employee.findUnique({
+        where: { id },
+        select: { dailyCost: true },
+      })
+      if (!employee) {
+        return NextResponse.json({ error: 'Funcionario nao encontrado' }, { status: 404 })
+      }
+      amount = body.type === 'FALTA' ? employee.dailyCost : employee.dailyCost / 2
+    }
+
     const deduction = await prisma.employeeDeduction.create({
       data: {
         employeeId: id,
         type: body.type,
-        amount: parseFloat(body.amount) || 0,
+        amount,
         date: body.date ? new Date(body.date) : new Date(),
         description: body.description || '',
       },

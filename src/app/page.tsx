@@ -20,13 +20,18 @@ interface DashboardData {
   fluxoCaixa: Array<{ mes: string; entradas: number; saidas: number }>
 }
 
-type Periodo = 'hoje' | 'semana' | 'mes' | 'ano'
+type Periodo = 'hoje' | 'semana' | 'mes' | 'ano' | 'custom'
 
 const periodos: { label: string; value: Periodo }[] = [
   { label: 'Hoje', value: 'hoje' },
   { label: 'Semana', value: 'semana' },
-  { label: 'Mes', value: 'mes' },
-  { label: 'Ano', value: 'ano' },
+  { label: 'Mes Atual', value: 'mes' },
+  { label: 'Ano Atual', value: 'ano' },
+]
+
+const MESES = [
+  'Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ]
 
 function SkeletonCard() {
@@ -126,14 +131,28 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [periodo, setPeriodo] = useState<Periodo>('mes')
+  const now = new Date()
+  const [mesFiltro, setMesFiltro] = useState<number>(now.getMonth() + 1)
+  const [anoFiltro, setAnoFiltro] = useState<number>(now.getFullYear())
   const [error, setError] = useState('')
+
+  const anosDisponiveis = (() => {
+    const anoAtual = now.getFullYear()
+    const anos: number[] = []
+    for (let a = anoAtual - 3; a <= anoAtual + 1; a++) anos.push(a)
+    return anos
+  })()
 
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
       setError('')
       try {
-        const res = await fetch(`/api/dashboard?periodo=${periodo}`)
+        const url =
+          periodo === 'custom'
+            ? `/api/dashboard?mes=${mesFiltro}&ano=${anoFiltro}`
+            : `/api/dashboard?periodo=${periodo}`
+        const res = await fetch(url)
         if (!res.ok) throw new Error('Erro ao carregar dados')
         const json = await res.json()
         setData(json)
@@ -145,7 +164,7 @@ export default function DashboardPage() {
       }
     }
     fetchData()
-  }, [periodo])
+  }, [periodo, mesFiltro, anoFiltro])
 
   return (
     <div className="space-y-6">
@@ -160,20 +179,46 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1 bg-grafite-800 rounded-lg p-1">
-          {periodos.map((p) => (
-            <button
-              key={p.value}
-              onClick={() => setPeriodo(p.value)}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                periodo === p.value
-                  ? 'bg-amarelo text-grafite-950'
-                  : 'text-grafite-400 hover:text-grafite-200 hover:bg-grafite-700'
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-wrap items-center gap-1 bg-grafite-800 rounded-lg p-1">
+            {periodos.map((p) => (
+              <button
+                key={p.value}
+                onClick={() => setPeriodo(p.value)}
+                className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  periodo === p.value
+                    ? 'bg-amarelo text-grafite-950'
+                    : 'text-grafite-400 hover:text-grafite-200 hover:bg-grafite-700'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 bg-grafite-800 rounded-lg p-1">
+            <select
+              value={mesFiltro}
+              onChange={(e) => { setMesFiltro(parseInt(e.target.value, 10)); setPeriodo('custom') }}
+              className={`text-sm px-2 py-1.5 rounded-md bg-transparent border border-grafite-700 ${
+                periodo === 'custom' ? 'text-amarelo border-amarelo' : 'text-grafite-300'
               }`}
             >
-              {p.label}
-            </button>
-          ))}
+              {MESES.map((m, i) => (
+                <option key={i} value={i + 1} className="bg-grafite-800">{m}</option>
+              ))}
+            </select>
+            <select
+              value={anoFiltro}
+              onChange={(e) => { setAnoFiltro(parseInt(e.target.value, 10)); setPeriodo('custom') }}
+              className={`text-sm px-2 py-1.5 rounded-md bg-transparent border border-grafite-700 ${
+                periodo === 'custom' ? 'text-amarelo border-amarelo' : 'text-grafite-300'
+              }`}
+            >
+              {anosDisponiveis.map((a) => (
+                <option key={a} value={a} className="bg-grafite-800">{a}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

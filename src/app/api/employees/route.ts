@@ -1,15 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth, requireAllowedPage } from '@/lib/auth'
+import { BUSINESS_DAYS_PER_MONTH } from '@/lib/calculations'
 
-export async function GET() {
+// Derive dailyCost from legacy monthlyCost quando necessario
+function deriveDailyFromMonthly(monthlyCost: number): number {
+  return monthlyCost / BUSINESS_DAYS_PER_MONTH
+}
+
+// Mantem monthlyCost como dailyCost * 22 pra compat com codigo antigo
+function computeMonthlyFromDaily(dailyCost: number): number {
+  return dailyCost * BUSINESS_DAYS_PER_MONTH
+}
+
+// Backfill lazy do dailyCost. Roda uma unica vez por instancia.
+let employeesBackfilled = false
+async function backfillDailyCostOnce() {
+  if (employeesBackfilled) return
+  employeesBackfilled = true
+  try {
+    const pending = await prisma.employee.findMany({
+      where: { dailyCost: 0, monthlyCost: { gt: 0 } },
+      select: { id: true, monthlyCost: true },
+    })
+    for (const emp of pending) {
+      await prisma.employee.update({
+        where: { id: emp.id },
+        data: { dailyCost: deriveDailyFromMonthly(emp.monthlyCost) },
+      })
+    }
+  } catch (err) {
+    console.error('Erro no backfill de dailyCost:', err)
+    employeesBackfilled = false
+  }
+}
+
+export async function GET(request: NextRequest) {
   const { error } = await requireAuth()
   if (error) return error
 
   try {
-    const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+    await backfillDailyCostOnce()
+
+    const { searchParams } = new URL(request.url)
+    const monthParam = searchParams.get('month') // YYYY-MM opcional
+    let refDate = new Date()
+    if (monthParam) {
+      const [y, m] = monthParam.split('-').map(Number)
+      if (y && m) refDate = new Date(y, m - 1, 1)
+    }
+    const startOfMonth = new Date(refDate.getFullYear(), refDate.getMonth(), 1)
+    const endOfMonth = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0, 23, 59, 59)
 
     const employees = await prisma.employee.findMany({
       include: {
@@ -41,11 +82,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
+    // Prioriza dailyCost do cliente; se veio so monthlyCost (legado), deriva.
+    const dailyCost = typeof body.dailyCost === 'number' && body.dailyCost >= 0
+      ? body.dailyCost
+      : deriveDailyFromMonthly(parseFloat(body.monthlyCost) || 0)
+    const monthlyCost = computeMonthlyFromDaily(dailyCost)
+
     const employee = await prisma.employee.create({
       data: {
         name: body.name,
         role: body.role,
-        monthlyCost: parseFloat(body.monthlyCost) || 0,
+        dailyCost,
+        monthlyCost,
         benefits: parseFloat(body.benefits) || 0,
         active: body.active ?? true,
       },
@@ -72,12 +120,19 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const dailyCost = typeof body.dailyCost === 'number' && body.dailyCost >= 0
+      ? body.dailyCost
+      : deriveDailyFromMonthly(parseFloat(body.monthlyCost) || 0)
+    const monthlyCost = computeMonthlyFromDaily(dailyCost)
+
     const employee = await prisma.employee.update({
       where: { id: body.id },
       data: {
         name: body.name,
         role: body.role,
-        monthlyCost: parseFloat(body.monthlyCost) || 0,
+        dailyCost,
+        monthlyCost,
         benefits: parseFloat(body.benefits) || 0,
         active: body.active,
       },

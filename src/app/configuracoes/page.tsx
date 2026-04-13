@@ -24,6 +24,10 @@ import {
   ChevronUp,
   Loader2,
   AlertCircle,
+  Banknote,
+  Plus,
+  Edit2,
+  LayoutGrid,
 } from 'lucide-react'
 import { useTheme } from '@/components/ThemeProvider'
 
@@ -71,6 +75,35 @@ const CHANGELOG_COLORS: Record<string, string> = {
   other: 'text-gray-400 bg-gray-400/10 border-gray-400/30',
 }
 
+interface FinancialOption {
+  id: string
+  type: 'BANK' | 'CATEGORY' | 'GROUP'
+  name: string
+  active: boolean
+  order: number
+}
+
+interface ConfiguratorOption {
+  id: string
+  categoryId: string
+  name: string
+  description: string | null
+  unitPrice: number
+  tempoDias: number
+  order: number
+  active: boolean
+}
+
+interface ConfiguratorCategory {
+  id: string
+  name: string
+  description: string | null
+  selectionType: 'SINGLE' | 'MULTIPLE'
+  order: number
+  active: boolean
+  options: ConfiguratorOption[]
+}
+
 interface TemplateData {
   id: string
   companyName: string
@@ -93,13 +126,234 @@ export default function ConfiguracoesPage() {
   const [saved, setSaved] = useState(false)
   const [newLogo, setNewLogo] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'identity' | 'colors' | 'texts' | 'preview' | 'changelog'>('identity')
+  const [activeTab, setActiveTab] = useState<'identity' | 'colors' | 'texts' | 'preview' | 'changelog' | 'financeiro' | 'configurador'>('identity')
   const [changelog, setChangelog] = useState<ChangelogData | null>(null)
   const [changelogLoading, setChangelogLoading] = useState(false)
   const [changelogError, setChangelogError] = useState('')
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
+  const [finOptions, setFinOptions] = useState<FinancialOption[]>([])
+  const [finLoading, setFinLoading] = useState(false)
+  const [finError, setFinError] = useState('')
+  const [newFinName, setNewFinName] = useState<Record<string, string>>({ BANK: '', CATEGORY: '', GROUP: '' })
+  const [editingFinId, setEditingFinId] = useState<string | null>(null)
+  const [editingFinName, setEditingFinName] = useState('')
+
+  // Configurador state
+  const [configCategories, setConfigCategories] = useState<ConfiguratorCategory[]>([])
+  const [configLoading, setConfigLoading] = useState(false)
+  const [configError, setConfigError] = useState('')
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryType, setNewCategoryType] = useState<'SINGLE' | 'MULTIPLE'>('SINGLE')
+  const [expandedCatId, setExpandedCatId] = useState<string | null>(null)
+  const [newOption, setNewOption] = useState<Record<string, { name: string; unitPrice: number; tempoDias: number }>>({})
+
   const { refreshTheme } = useTheme()
+
+  const fetchFinOptions = useCallback(async () => {
+    setFinLoading(true)
+    setFinError('')
+    try {
+      const res = await fetch('/api/financial-options')
+      if (res.ok) setFinOptions(await res.json())
+      else setFinError('Erro ao carregar opcoes')
+    } catch {
+      setFinError('Erro de conexao')
+    } finally {
+      setFinLoading(false)
+    }
+  }, [])
+
+  const addFinOption = async (type: 'BANK' | 'CATEGORY' | 'GROUP') => {
+    const name = (newFinName[type] || '').trim()
+    if (!name) return
+    setFinError('')
+    try {
+      const res = await fetch('/api/financial-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, name }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setFinError(data.error || 'Erro ao criar opcao')
+        return
+      }
+      setNewFinName((prev) => ({ ...prev, [type]: '' }))
+      await fetchFinOptions()
+    } catch {
+      setFinError('Erro de conexao')
+    }
+  }
+
+  const updateFinOption = async (id: string, payload: any) => {
+    setFinError('')
+    try {
+      const res = await fetch('/api/financial-options', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...payload }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setFinError(data.error || 'Erro ao atualizar')
+        return
+      }
+      await fetchFinOptions()
+    } catch {
+      setFinError('Erro de conexao')
+    }
+  }
+
+  // Configurador CRUD
+  const fetchConfigCategories = useCallback(async () => {
+    setConfigLoading(true)
+    setConfigError('')
+    try {
+      const res = await fetch('/api/configurator/categories')
+      if (res.ok) setConfigCategories(await res.json())
+      else setConfigError('Erro ao carregar categorias')
+    } catch {
+      setConfigError('Erro de conexao')
+    } finally {
+      setConfigLoading(false)
+    }
+  }, [])
+
+  const addCategory = async () => {
+    const name = newCategoryName.trim()
+    if (!name) return
+    setConfigError('')
+    try {
+      const res = await fetch('/api/configurator/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, selectionType: newCategoryType }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setConfigError(data.error || 'Erro ao criar categoria')
+        return
+      }
+      setNewCategoryName('')
+      await fetchConfigCategories()
+    } catch {
+      setConfigError('Erro de conexao')
+    }
+  }
+
+  const updateCategory = async (id: string, payload: any) => {
+    setConfigError('')
+    try {
+      const res = await fetch('/api/configurator/categories', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...payload }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setConfigError(data.error || 'Erro ao atualizar categoria')
+        return
+      }
+      await fetchConfigCategories()
+    } catch {
+      setConfigError('Erro de conexao')
+    }
+  }
+
+  const deleteCategory = async (id: string) => {
+    if (!confirm('Excluir esta categoria e todas as suas opcoes?')) return
+    setConfigError('')
+    try {
+      const res = await fetch(`/api/configurator/categories?id=${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json()
+        setConfigError(data.error || 'Erro ao excluir')
+        return
+      }
+      await fetchConfigCategories()
+    } catch {
+      setConfigError('Erro de conexao')
+    }
+  }
+
+  const addOption = async (categoryId: string) => {
+    const opt = newOption[categoryId]
+    if (!opt || !opt.name?.trim()) return
+    setConfigError('')
+    try {
+      const res = await fetch('/api/configurator/options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          categoryId,
+          name: opt.name,
+          unitPrice: opt.unitPrice || 0,
+          tempoDias: opt.tempoDias || 0,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setConfigError(data.error || 'Erro ao criar opcao')
+        return
+      }
+      setNewOption((prev) => ({ ...prev, [categoryId]: { name: '', unitPrice: 0, tempoDias: 0 } }))
+      await fetchConfigCategories()
+    } catch {
+      setConfigError('Erro de conexao')
+    }
+  }
+
+  const updateOption = async (id: string, payload: any) => {
+    setConfigError('')
+    try {
+      const res = await fetch('/api/configurator/options', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...payload }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setConfigError(data.error || 'Erro ao atualizar')
+        return
+      }
+      await fetchConfigCategories()
+    } catch {
+      setConfigError('Erro de conexao')
+    }
+  }
+
+  const deleteOption = async (id: string) => {
+    if (!confirm('Excluir esta opcao?')) return
+    setConfigError('')
+    try {
+      const res = await fetch(`/api/configurator/options?id=${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json()
+        setConfigError(data.error || 'Erro ao excluir')
+        return
+      }
+      await fetchConfigCategories()
+    } catch {
+      setConfigError('Erro de conexao')
+    }
+  }
+
+  const deleteFinOption = async (id: string) => {
+    if (!confirm('Excluir esta opcao? Lancamentos existentes manterao o nome ja gravado.')) return
+    setFinError('')
+    try {
+      const res = await fetch(`/api/financial-options?id=${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json()
+        setFinError(data.error || 'Erro ao excluir')
+        return
+      }
+      await fetchFinOptions()
+    } catch {
+      setFinError('Erro de conexao')
+    }
+  }
 
   const fetchTemplate = useCallback(async () => {
     setLoading(true)
@@ -147,7 +401,13 @@ export default function ConfiguracoesPage() {
     if (activeTab === 'changelog') {
       fetchChangelog()
     }
-  }, [activeTab, fetchChangelog])
+    if (activeTab === 'financeiro') {
+      fetchFinOptions()
+    }
+    if (activeTab === 'configurador') {
+      fetchConfigCategories()
+    }
+  }, [activeTab, fetchChangelog, fetchFinOptions, fetchConfigCategories])
 
   const handleSave = async () => {
     if (!template) return
@@ -231,6 +491,8 @@ export default function ConfiguracoesPage() {
     { id: 'colors' as const, label: 'Cores', icon: Palette },
     { id: 'texts' as const, label: 'Textos', icon: Type },
     { id: 'preview' as const, label: 'Preview', icon: Eye },
+    { id: 'financeiro' as const, label: 'Financeiro', icon: Banknote },
+    { id: 'configurador' as const, label: 'Configurador', icon: LayoutGrid },
     { id: 'changelog' as const, label: 'Atualizacoes', icon: History },
   ]
 
@@ -664,6 +926,402 @@ export default function ConfiguracoesPage() {
               {template.companyName} — {template.footerText} — Validade: {template.validityDays} dias
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Financeiro Tab — 3 listas configuraveis */}
+      {activeTab === 'financeiro' && (
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider">
+              Opcoes de Lancamento Financeiro
+            </h3>
+            <p className="text-xs text-gray-500 mt-1">
+              Cadastre os bancos, categorias e agrupadores que vao aparecer nos selects do Financeiro.
+            </p>
+          </div>
+
+          {finError && (
+            <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-2 rounded-lg text-sm">
+              {finError}
+              <button onClick={() => setFinError('')} className="ml-3 text-red-400 hover:text-red-300">x</button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {([
+              { type: 'BANK', label: 'Bancos', help: 'Ex: Itau PJ, Bradesco, Sicoob, Caixa dinheiro' },
+              { type: 'CATEGORY', label: 'Categorias', help: 'Ex: Material, Combustivel, Almoco, Energia' },
+              { type: 'GROUP', label: 'Agrupadores', help: 'Ex: Obra Joao, Obra Maria, Despesas fixas' },
+            ] as const).map((cfg) => {
+              const items = finOptions.filter((o) => o.type === cfg.type)
+              return (
+                <div key={cfg.type} className="card">
+                  <h4 className="text-sm font-bold text-gray-100 mb-1">{cfg.label}</h4>
+                  <p className="text-xs text-gray-500 mb-3">{cfg.help}</p>
+
+                  <div className="flex gap-2 mb-3">
+                    <input
+                      type="text"
+                      value={newFinName[cfg.type] || ''}
+                      onChange={(e) => setNewFinName({ ...newFinName, [cfg.type]: e.target.value })}
+                      onKeyDown={(e) => { if (e.key === 'Enter') addFinOption(cfg.type) }}
+                      placeholder={`Novo ${cfg.label.toLowerCase().slice(0, -1)}`}
+                      className="input-field flex-1 text-sm"
+                      maxLength={80}
+                    />
+                    <button
+                      onClick={() => addFinOption(cfg.type)}
+                      disabled={!newFinName[cfg.type]?.trim()}
+                      className="btn-primary text-sm px-3 py-2 disabled:opacity-40"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {finLoading ? (
+                    <p className="text-xs text-gray-500 text-center py-4">Carregando...</p>
+                  ) : items.length === 0 ? (
+                    <p className="text-xs text-gray-500 text-center py-4">Nenhum cadastrado ainda.</p>
+                  ) : (
+                    <ul className="space-y-1 max-h-80 overflow-y-auto">
+                      {items.map((item) => (
+                        <li
+                          key={item.id}
+                          className={`flex items-center gap-2 px-2 py-2 rounded hover:bg-grafite-800 ${
+                            !item.active ? 'opacity-50' : ''
+                          }`}
+                        >
+                          {editingFinId === item.id ? (
+                            <>
+                              <input
+                                type="text"
+                                value={editingFinName}
+                                onChange={(e) => setEditingFinName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    updateFinOption(item.id, { name: editingFinName })
+                                    setEditingFinId(null)
+                                  }
+                                  if (e.key === 'Escape') setEditingFinId(null)
+                                }}
+                                className="input-field flex-1 text-sm py-1"
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => { updateFinOption(item.id, { name: editingFinName }); setEditingFinId(null) }}
+                                className="text-green-400 hover:text-green-300 p-1"
+                                title="Salvar"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setEditingFinId(null)}
+                                className="text-gray-400 hover:text-gray-300 p-1"
+                                title="Cancelar"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <span className="flex-1 text-sm text-gray-200 truncate">{item.name}</span>
+                              <button
+                                onClick={() => updateFinOption(item.id, { active: !item.active })}
+                                className={`text-xs px-2 py-0.5 rounded-full ${
+                                  item.active
+                                    ? 'bg-green-900/50 text-green-400'
+                                    : 'bg-gray-700 text-gray-400'
+                                }`}
+                                title="Ativar/desativar"
+                              >
+                                {item.active ? 'Ativo' : 'Inativo'}
+                              </button>
+                              <button
+                                onClick={() => { setEditingFinId(item.id); setEditingFinName(item.name) }}
+                                className="text-amarelo hover:text-amarelo-light p-1"
+                                title="Editar"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => deleteFinOption(item.id)}
+                                className="text-red-500 hover:text-red-400 p-1"
+                                title="Excluir"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Configurador Tab — Monte o seu */}
+      {activeTab === 'configurador' && (
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider">
+              Configurador "Monte o seu"
+            </h3>
+            <p className="text-xs text-gray-500 mt-1">
+              Cadastre categorias (cobertura, revestimento, piso, opcionais...) e dentro de cada uma as opcoes disponiveis com preco e tempo.
+              No orcamento o usuario vai marcar as opcoes e o preco + dias serao somados automaticamente.
+            </p>
+          </div>
+
+          {configError && (
+            <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-2 rounded-lg text-sm">
+              {configError}
+              <button onClick={() => setConfigError('')} className="ml-3 text-red-400 hover:text-red-300">x</button>
+            </div>
+          )}
+
+          {/* Add Category */}
+          <div className="card">
+            <h4 className="text-sm font-semibold text-gray-200 mb-3">Nova Categoria</h4>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') addCategory() }}
+                placeholder="Ex: Cobertura, Revestimento, Piso, Opcionais"
+                className="input-field flex-1 text-sm"
+                maxLength={80}
+              />
+              <select
+                value={newCategoryType}
+                onChange={(e) => setNewCategoryType(e.target.value as 'SINGLE' | 'MULTIPLE')}
+                className="select-field text-sm"
+              >
+                <option value="SINGLE">Escolha unica</option>
+                <option value="MULTIPLE">Multipla selecao</option>
+              </select>
+              <button
+                onClick={addCategory}
+                disabled={!newCategoryName.trim()}
+                className="btn-primary text-sm px-4 py-2 disabled:opacity-40 flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" /> Criar
+              </button>
+            </div>
+          </div>
+
+          {/* Categories List */}
+          {configLoading ? (
+            <p className="text-sm text-gray-500 text-center py-8">Carregando...</p>
+          ) : configCategories.length === 0 ? (
+            <div className="card text-center py-8">
+              <p className="text-sm text-gray-500">Nenhuma categoria cadastrada ainda.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {configCategories.map((cat) => {
+                const isExpanded = expandedCatId === cat.id
+                const typeLabel = cat.selectionType === 'SINGLE' ? 'Escolha unica' : 'Multipla selecao'
+                return (
+                  <div key={cat.id} className="card">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-sm font-bold text-gray-100">{cat.name}</h4>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-grafite-700 text-gray-300">
+                            {typeLabel}
+                          </span>
+                          {!cat.active && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400">
+                              Inativa
+                            </span>
+                          )}
+                          <span className="text-xs text-gray-500">
+                            {cat.options.length} {cat.options.length === 1 ? 'opcao' : 'opcoes'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateCategory(cat.id, { selectionType: cat.selectionType === 'SINGLE' ? 'MULTIPLE' : 'SINGLE' })}
+                          className="text-xs btn-secondary px-2 py-1"
+                          title="Alternar tipo de selecao"
+                        >
+                          Alternar tipo
+                        </button>
+                        <button
+                          onClick={() => updateCategory(cat.id, { active: !cat.active })}
+                          className={`text-xs px-2 py-1 rounded ${cat.active ? 'bg-green-900/40 text-green-300' : 'bg-gray-700 text-gray-400'}`}
+                        >
+                          {cat.active ? 'Ativa' : 'Inativa'}
+                        </button>
+                        <button
+                          onClick={() => setExpandedCatId(isExpanded ? null : cat.id)}
+                          className="btn-secondary text-xs px-3 py-1"
+                        >
+                          {isExpanded ? 'Fechar' : 'Opcoes'}
+                        </button>
+                        <button
+                          onClick={() => deleteCategory(cat.id)}
+                          className="text-red-500 hover:text-red-400 p-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="mt-4 space-y-3 border-t border-grafite-700 pt-4">
+                        {/* Add option */}
+                        <div className="bg-grafite-800 rounded-lg p-3">
+                          <p className="text-xs text-gray-400 mb-2">Nova opcao</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                            <input
+                              type="text"
+                              placeholder="Nome da opcao"
+                              value={newOption[cat.id]?.name || ''}
+                              onChange={(e) =>
+                                setNewOption((prev) => ({
+                                  ...prev,
+                                  [cat.id]: { ...(prev[cat.id] || { unitPrice: 0, tempoDias: 0 }), name: e.target.value },
+                                }))
+                              }
+                              className="input-field text-sm sm:col-span-2"
+                            />
+                            <input
+                              type="number"
+                              placeholder="Preco (R$)"
+                              step="0.01"
+                              min="0"
+                              value={newOption[cat.id]?.unitPrice || ''}
+                              onChange={(e) =>
+                                setNewOption((prev) => ({
+                                  ...prev,
+                                  [cat.id]: { ...(prev[cat.id] || { name: '', tempoDias: 0 }), unitPrice: parseFloat(e.target.value) || 0 },
+                                }))
+                              }
+                              className="input-field text-sm"
+                            />
+                            <input
+                              type="number"
+                              placeholder="Dias"
+                              step="0.5"
+                              min="0"
+                              value={newOption[cat.id]?.tempoDias || ''}
+                              onChange={(e) =>
+                                setNewOption((prev) => ({
+                                  ...prev,
+                                  [cat.id]: { ...(prev[cat.id] || { name: '', unitPrice: 0 }), tempoDias: parseFloat(e.target.value) || 0 },
+                                }))
+                              }
+                              className="input-field text-sm"
+                            />
+                          </div>
+                          <button
+                            onClick={() => addOption(cat.id)}
+                            disabled={!newOption[cat.id]?.name?.trim()}
+                            className="btn-primary text-xs mt-2 disabled:opacity-40 flex items-center gap-1"
+                          >
+                            <Plus className="w-3 h-3" /> Adicionar opcao
+                          </button>
+                        </div>
+
+                        {/* Options list */}
+                        {cat.options.length === 0 ? (
+                          <p className="text-xs text-gray-500 text-center py-4">Nenhuma opcao cadastrada.</p>
+                        ) : (
+                          <ul className="space-y-2">
+                            {cat.options.map((opt) => (
+                              <li
+                                key={opt.id}
+                                className={`bg-grafite-800 rounded-lg p-3 ${!opt.active ? 'opacity-50' : ''}`}
+                              >
+                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
+                                  <input
+                                    type="text"
+                                    value={opt.name}
+                                    onChange={(e) => {
+                                      setConfigCategories((prev) =>
+                                        prev.map((c) =>
+                                          c.id !== cat.id ? c : {
+                                            ...c,
+                                            options: c.options.map((o) => o.id === opt.id ? { ...o, name: e.target.value } : o),
+                                          }
+                                        )
+                                      )
+                                    }}
+                                    onBlur={() => updateOption(opt.id, { name: opt.name })}
+                                    className="input-field text-sm sm:col-span-2"
+                                  />
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={opt.unitPrice}
+                                    onChange={(e) => {
+                                      const val = parseFloat(e.target.value) || 0
+                                      setConfigCategories((prev) =>
+                                        prev.map((c) =>
+                                          c.id !== cat.id ? c : {
+                                            ...c,
+                                            options: c.options.map((o) => o.id === opt.id ? { ...o, unitPrice: val } : o),
+                                          }
+                                        )
+                                      )
+                                    }}
+                                    onBlur={() => updateOption(opt.id, { unitPrice: opt.unitPrice })}
+                                    className="input-field text-sm"
+                                  />
+                                  <input
+                                    type="number"
+                                    step="0.5"
+                                    min="0"
+                                    value={opt.tempoDias}
+                                    onChange={(e) => {
+                                      const val = parseFloat(e.target.value) || 0
+                                      setConfigCategories((prev) =>
+                                        prev.map((c) =>
+                                          c.id !== cat.id ? c : {
+                                            ...c,
+                                            options: c.options.map((o) => o.id === opt.id ? { ...o, tempoDias: val } : o),
+                                          }
+                                        )
+                                      )
+                                    }}
+                                    onBlur={() => updateOption(opt.id, { tempoDias: opt.tempoDias })}
+                                    className="input-field text-sm"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2 mt-2 justify-end">
+                                  <button
+                                    onClick={() => updateOption(opt.id, { active: !opt.active })}
+                                    className={`text-xs px-2 py-0.5 rounded ${opt.active ? 'bg-green-900/40 text-green-300' : 'bg-gray-700 text-gray-400'}`}
+                                  >
+                                    {opt.active ? 'Ativa' : 'Inativa'}
+                                  </button>
+                                  <button
+                                    onClick={() => deleteOption(opt.id)}
+                                    className="text-red-500 hover:text-red-400 p-1"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 

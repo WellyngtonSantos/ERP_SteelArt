@@ -2,8 +2,30 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 
-function getDateRange(periodo: string): { start: Date; end: Date } {
+function getDateRange(periodo: string, mesParam?: string | null, anoParam?: string | null): { start: Date; end: Date } {
   const now = new Date()
+
+  // Mes/ano explicitos tem prioridade
+  if (mesParam && anoParam) {
+    const mes = parseInt(mesParam, 10)
+    const ano = parseInt(anoParam, 10)
+    if (!isNaN(mes) && !isNaN(ano) && mes >= 1 && mes <= 12 && ano >= 2000 && ano <= 2100) {
+      const start = new Date(ano, mes - 1, 1, 0, 0, 0, 0)
+      const end = new Date(ano, mes, 0, 23, 59, 59, 999) // ultimo dia do mes
+      return { start, end }
+    }
+  }
+
+  // Apenas ano (sem mes)
+  if (anoParam && !mesParam) {
+    const ano = parseInt(anoParam, 10)
+    if (!isNaN(ano) && ano >= 2000 && ano <= 2100) {
+      const start = new Date(ano, 0, 1, 0, 0, 0, 0)
+      const end = new Date(ano, 11, 31, 23, 59, 59, 999)
+      return { start, end }
+    }
+  }
+
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
   let start: Date
 
@@ -36,7 +58,9 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const periodo = searchParams.get('periodo') || 'mes'
-    const { start, end } = getDateRange(periodo)
+    const mes = searchParams.get('mes')
+    const ano = searchParams.get('ano')
+    const { start, end } = getDateRange(periodo, mes, ano)
 
     // Custo Empresa / Dia
     const fixedCosts = await prisma.fixedCost.aggregate({
@@ -44,13 +68,16 @@ export async function GET(request: NextRequest) {
       _sum: { amount: true },
     })
 
+    // Folha agora usa dailyCost (salario diario) — fonte da verdade
     const employees = await prisma.employee.aggregate({
       where: { active: true },
-      _sum: { monthlyCost: true },
+      _sum: { dailyCost: true, monthlyCost: true },
     })
 
     const custoFixoMensal = fixedCosts._sum.amount || 0
-    const folhaSalarial = employees._sum.monthlyCost || 0
+    const folhaDiaria = employees._sum.dailyCost || 0
+    // folhaSalarial estimada mensal (22 dias uteis) — usada so no custoEmpresaDia
+    const folhaSalarial = folhaDiaria * 22
     const custoEmpresaDia = (custoFixoMensal + folhaSalarial) / 22
 
     // Saldo em Caixa (all time - paid entries)
@@ -112,13 +139,12 @@ export async function GET(request: NextRequest) {
       _sum: { amount: true },
     })
 
-    // Calculate proportional employee cost for the period
+    // Calculate employee cost for the period: folhaDiaria * dias corridos no periodo
     const totalDaysInPeriod = Math.max(
       1,
       Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
     )
-    const maoDeObra =
-      (valesResult._sum.amount || 0) + (folhaSalarial / 30) * totalDaysInPeriod
+    const maoDeObra = (valesResult._sum.amount || 0) + folhaDiaria * totalDaysInPeriod
 
     // Custos Fixos (proportional for the period)
     const custosFixosProporcional = (custoFixoMensal / 30) * totalDaysInPeriod

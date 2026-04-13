@@ -18,7 +18,7 @@ import {
   Building2,
   Loader2,
 } from 'lucide-react'
-import { calcOrcamento, calcValorHora, formatCurrency, formatPercent } from '@/lib/calculations'
+import { calcOrcamento, calcOrcamentoOperacional, calcValorHora, formatCurrency, formatPercent } from '@/lib/calculations'
 
 // --------------- Types ---------------
 
@@ -50,6 +50,50 @@ interface BudgetEmployeeForm {
   selected: boolean
 }
 
+interface BudgetPaymentForm {
+  method: string
+  amount: number
+  taxRate: number
+  dueOffset: number
+}
+
+interface BudgetPickForm {
+  optionId: string
+  optionName: string
+  categoryName: string
+  unitPrice: number
+  tempoDias: number
+  quantity: number
+}
+
+interface ConfiguratorOptionData {
+  id: string
+  categoryId: string
+  name: string
+  unitPrice: number
+  tempoDias: number
+  order: number
+  active: boolean
+}
+
+interface ConfiguratorCategoryData {
+  id: string
+  name: string
+  selectionType: 'SINGLE' | 'MULTIPLE'
+  order: number
+  active: boolean
+  options: ConfiguratorOptionData[]
+}
+
+const PAYMENT_METHODS = [
+  { value: 'DINHEIRO', label: 'Dinheiro' },
+  { value: 'PIX', label: 'PIX' },
+  { value: 'BOLETO', label: 'Boleto' },
+  { value: 'CARTAO', label: 'Cartao de Credito' },
+  { value: 'CHEQUE', label: 'Cheque' },
+  { value: 'OUTROS', label: 'Outros' },
+]
+
 interface ProductData {
   id: string
   name: string
@@ -58,6 +102,8 @@ interface ProductData {
   ironCost: number
   paintCost: number
   defaultMargin: number
+  tempoProducaoDias: number
+  tempoMontagemDias: number
   images?: string
 }
 
@@ -95,6 +141,14 @@ interface BudgetForm {
   employees: BudgetEmployeeForm[]
   existingImages: string[]
   newImages: File[]
+  // Modo operacional (novo)
+  modoCalculo: 'MANUAL' | 'OPERACIONAL'
+  diasExecucao: number
+  custoOperacionalDia: number
+  // Pagamento misto (novo)
+  payments: BudgetPaymentForm[]
+  // Configurador "Monte o seu"
+  picks: BudgetPickForm[]
 }
 
 interface Budget {
@@ -218,6 +272,11 @@ const emptyForm = (): BudgetForm => ({
   employees: [],
   existingImages: [],
   newImages: [],
+  modoCalculo: 'OPERACIONAL', // novo padrao
+  diasExecucao: 0,
+  custoOperacionalDia: 0,
+  payments: [],
+  picks: [],
 })
 
 // --------------- Budget Form Component ---------------
@@ -229,6 +288,7 @@ function BudgetFormPanel({
   materials,
   products,
   clients,
+  configCategories,
   onSave,
   onClose,
   saving,
@@ -239,6 +299,7 @@ function BudgetFormPanel({
   materials: Material[]
   products: ProductData[]
   clients: ClientData[]
+  configCategories: ConfiguratorCategoryData[]
   onSave: (status: string) => void
   onClose: () => void
   saving: boolean
@@ -313,6 +374,7 @@ function BudgetFormPanel({
       JSON.parse(product.materialsJson || '[]')
 
     const productImages = product.images ? product.images.split('|||').filter(Boolean) : []
+    const tempoTotal = (product.tempoProducaoDias || 0) + (product.tempoMontagemDias || 0)
 
     setForm((prev) => ({
       ...prev,
@@ -321,6 +383,7 @@ function BudgetFormPanel({
       ironCost: product.ironCost,
       paintCost: product.paintCost,
       profitMargin: product.defaultMargin,
+      diasExecucao: tempoTotal > 0 ? tempoTotal : prev.diasExecucao,
       existingImages: productImages,
       newImages: [],
       items: materials.length > 0
@@ -347,14 +410,58 @@ function BudgetFormPanel({
     }
   }, [allEmployees, form.employees.length, form.id, setForm])
 
-  // Real-time calculation
+  // Carregar custo operacional atual da empresa (para modo OPERACIONAL)
+  useEffect(() => {
+    if (form.custoOperacionalDia > 0 || form.id) return
+    fetch('/api/operational-cost')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data && typeof data.custoOperacionalDia === 'number') {
+          setForm((prev) => ({ ...prev, custoOperacionalDia: data.custoOperacionalDia }))
+        }
+      })
+      .catch(() => {})
+  }, [form.id, form.custoOperacionalDia, setForm])
+
+  // Real-time calculation — escolhe entre OPERACIONAL e MANUAL; picks do configurador somam em ambos
   const calculation = useMemo(() => {
     const custoItens = form.items.reduce(
       (sum, item) => sum + item.quantity * item.unitPrice,
       0
     )
-    const custoMateriais = custoItens + form.ironCost
+    // Picks do configurador: cada um acrescenta unitPrice × quantity ao custo e tempoDias × quantity aos dias
+    const custoPicks = form.picks.reduce(
+      (sum, p) => sum + p.unitPrice * p.quantity,
+      0
+    )
+    const diasPicks = form.picks.reduce(
+      (sum, p) => sum + p.tempoDias * p.quantity,
+      0
+    )
 
+    if (form.modoCalculo === 'OPERACIONAL') {
+      const custoMateriais = custoItens + custoPicks
+      const diasTotais = form.diasExecucao + diasPicks
+      const calc = calcOrcamentoOperacional({
+        custoOperacionalDia: form.custoOperacionalDia,
+        diasExecucao: diasTotais,
+        custoMateriais,
+        margemLucro: form.profitMargin,
+        margemCausalidade: form.casualtyMargin,
+        aliquotaImposto: form.taxRate,
+      })
+      return {
+        ...calc,
+        custoMaoDeObra: calc.custoOperacional,
+        custoMateriais,
+        custoPicks,
+        diasPicks,
+        diasTotais,
+      }
+    }
+
+    // Modo MANUAL (legado)
+    const custoMateriais = custoItens + form.ironCost + custoPicks
     const custoMaoDeObra = form.employees
       .filter((e) => e.selected && e.hoursAllocated > 0)
       .reduce((sum, emp) => {
@@ -372,7 +479,15 @@ function BudgetFormPanel({
       aliquotaImposto: form.taxRate,
     })
 
-    return { ...calc, custoMaoDeObra, custoMateriais }
+    return {
+      ...calc,
+      custoMaoDeObra,
+      custoMateriais,
+      custoOperacional: 0,
+      custoPicks,
+      diasPicks,
+      diasTotais: form.diasExecucao + diasPicks,
+    }
   }, [form, allEmployees])
 
   const updateField = useCallback(
@@ -432,12 +547,6 @@ function BudgetFormPanel({
     [setForm]
   )
 
-  const Section = ({ id, title, children }: { id: string; title: string; children: React.ReactNode }) => (
-    <AccordionSection id={id} title={title} activeSection={activeSection} onToggle={setActiveSection}>
-      {children}
-    </AccordionSection>
-  )
-
   return (
     <div className="fixed inset-0 z-50 flex">
       {/* Backdrop */}
@@ -460,7 +569,7 @@ function BudgetFormPanel({
           {/* Form Left */}
           <div className="flex-1 p-6 space-y-4 overflow-y-auto overscroll-contain">
             {/* Product Selection */}
-            <Section id="product" title="O que sera orcado? (Produto)">
+            <AccordionSection id="product" title="O que sera orcado? (Produto)" activeSection={activeSection} onToggle={setActiveSection}>
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <button
                   type="button"
@@ -563,10 +672,10 @@ function BudgetFormPanel({
                   )}
                 </div>
               )}
-            </Section>
+            </AccordionSection>
 
             {/* Client Info */}
-            <Section id="client" title="Para quem e o orcamento? (Cliente)">
+            <AccordionSection id="client" title="Para quem e o orcamento? (Cliente)" activeSection={activeSection} onToggle={setActiveSection}>
               {/* Client Mode Selector */}
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <button
@@ -758,10 +867,10 @@ function BudgetFormPanel({
                   />
                 </div>
               </div>
-            </Section>
+            </AccordionSection>
 
             {/* Type Selector */}
-            <Section id="type" title="Qual o tipo? (Fabricacao, Servico ou Venda)">
+            <AccordionSection id="type" title="Qual o tipo? (Fabricacao, Servico ou Venda)" activeSection={activeSection} onToggle={setActiveSection}>
               <div className="grid grid-cols-3 gap-3">
                 {([
                   { key: 'PRODUTO' as const, label: 'Fabricacao', desc: 'Fabricar pecas, estruturas ou chales' },
@@ -788,10 +897,10 @@ function BudgetFormPanel({
                   Na venda de produtos, os itens serao descontados do estoque ao aprovar o orcamento.
                 </p>
               )}
-            </Section>
+            </AccordionSection>
 
             {/* Costs - hidden for VENDA type */}
-            {form.type !== 'VENDA' && <Section id="costs" title="Custos de Material (Ferro, Pintura, etc)">
+            {form.type !== 'VENDA' && <AccordionSection id="costs" title="Custos de Material (Ferro, Pintura, etc)" activeSection={activeSection} onToggle={setActiveSection}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="label-field">Custo de Ferro (R$)</label>
@@ -822,10 +931,93 @@ function BudgetFormPanel({
                   </div>
                 </div>
               </div>
-            </Section>}
+            </AccordionSection>}
+
+            {/* Modo de Calculo — Operacional vs Manual */}
+            {form.type !== 'VENDA' && (
+              <AccordionSection id="modo" title="Como calcular o orcamento?" activeSection={activeSection} onToggle={setActiveSection}>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => updateField('modoCalculo', 'OPERACIONAL')}
+                    className={`p-3 rounded-lg border-2 text-left transition-all ${
+                      form.modoCalculo === 'OPERACIONAL'
+                        ? 'border-amarelo bg-amarelo/10'
+                        : 'border-grafite-600 bg-grafite-800 hover:border-grafite-500'
+                    }`}
+                  >
+                    <div className="text-sm font-bold text-gray-100">Custo Operacional × Dias</div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      Base: custo da empresa aberta × dias de execucao + materiais
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateField('modoCalculo', 'MANUAL')}
+                    className={`p-3 rounded-lg border-2 text-left transition-all ${
+                      form.modoCalculo === 'MANUAL'
+                        ? 'border-amarelo bg-amarelo/10'
+                        : 'border-grafite-600 bg-grafite-800 hover:border-grafite-500'
+                    }`}
+                  >
+                    <div className="text-sm font-bold text-gray-100">Manual (legado)</div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      Base: ferro + pintura + mao-de-obra por hora
+                    </div>
+                  </button>
+                </div>
+
+                {form.modoCalculo === 'OPERACIONAL' && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="label-field">Custo Operacional / Dia (R$)</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">R$</span>
+                          <input
+                            type="number"
+                            className="input-field pl-10"
+                            value={form.custoOperacionalDia || ''}
+                            onChange={(e) => updateField('custoOperacionalDia', parseFloat(e.target.value) || 0)}
+                            step="0.01"
+                            min="0"
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Carregado automaticamente de (custos fixos + folha) / 22 dias.
+                        </p>
+                      </div>
+                      <div>
+                        <label className="label-field">Dias de Execucao</label>
+                        <input
+                          type="number"
+                          className="input-field"
+                          value={form.diasExecucao || ''}
+                          onChange={(e) => updateField('diasExecucao', parseFloat(e.target.value) || 0)}
+                          step="0.5"
+                          min="0"
+                          placeholder="Producao + montagem"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Auto-preenchido quando selecionar produto do catalogo.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="bg-grafite-800 rounded-lg p-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Custo operacional ({form.diasExecucao}d):</span>
+                        <span className="text-gray-200 font-medium">
+                          {formatCurrency(form.custoOperacionalDia * form.diasExecucao)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </AccordionSection>
+            )}
 
             {/* Margins */}
-            <Section id="margins" title="Lucro, Impostos e Margem de Seguranca">
+            <AccordionSection id="margins" title="Lucro, Impostos e Margem de Seguranca" activeSection={activeSection} onToggle={setActiveSection}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="label-field">
@@ -897,10 +1089,10 @@ function BudgetFormPanel({
                   />
                 </div>
               </div>
-            </Section>
+            </AccordionSection>
 
             {/* Employee Allocation - hidden for VENDA type */}
-            {form.type !== 'VENDA' && <Section id="employees" title="Quem vai trabalhar? (Mao de Obra)">
+            {form.type !== 'VENDA' && <AccordionSection id="employees" title="Quem vai trabalhar? (Mao de Obra)" activeSection={activeSection} onToggle={setActiveSection}>
               {form.employees.length === 0 ? (
                 <p className="text-sm text-gray-500">Carregando funcionarios...</p>
               ) : (
@@ -957,10 +1149,152 @@ function BudgetFormPanel({
                   })}
                 </div>
               )}
-            </Section>}
+            </AccordionSection>}
 
             {/* Budget Items */}
-            <Section id="items" title={form.type === 'VENDA' ? 'Produtos para Venda (serao descontados do estoque)' : 'Lista de Itens e Materiais'}>
+            {/* Monte o seu — configurador de opcoes cadastradas em Configuracoes */}
+            {form.type !== 'VENDA' && configCategories.filter((c) => c.active).length > 0 && (
+              <AccordionSection id="configurator" title="Monte o seu (cobertura, revestimento, piso, opcionais...)" activeSection={activeSection} onToggle={setActiveSection}>
+                <p className="text-xs text-gray-500 mb-4">
+                  Selecione as opcoes. O preco e o tempo (dias) serao somados automaticamente ao orcamento.
+                </p>
+
+                <div className="space-y-4">
+                  {configCategories.filter((c) => c.active).map((cat) => {
+                    const activeOpts = cat.options.filter((o) => o.active)
+                    if (activeOpts.length === 0) return null
+                    const picksNestaCat = form.picks.filter((p) => p.categoryName === cat.name)
+                    const pickedIds = new Set(picksNestaCat.map((p) => p.optionId))
+
+                    const togglePick = (opt: ConfiguratorOptionData) => {
+                      setForm((prev) => {
+                        const existing = prev.picks.find((p) => p.optionId === opt.id)
+                        if (existing) {
+                          // Deselect
+                          return { ...prev, picks: prev.picks.filter((p) => p.optionId !== opt.id) }
+                        }
+                        // Para SINGLE, remove outros da mesma categoria
+                        const filtered = cat.selectionType === 'SINGLE'
+                          ? prev.picks.filter((p) => p.categoryName !== cat.name)
+                          : prev.picks
+                        return {
+                          ...prev,
+                          picks: [
+                            ...filtered,
+                            {
+                              optionId: opt.id,
+                              optionName: opt.name,
+                              categoryName: cat.name,
+                              unitPrice: opt.unitPrice,
+                              tempoDias: opt.tempoDias,
+                              quantity: 1,
+                            },
+                          ],
+                        }
+                      })
+                    }
+
+                    const updateQty = (optionId: string, qty: number) => {
+                      setForm((prev) => ({
+                        ...prev,
+                        picks: prev.picks.map((p) =>
+                          p.optionId === optionId ? { ...p, quantity: Math.max(0, qty) } : p
+                        ),
+                      }))
+                    }
+
+                    return (
+                      <div key={cat.id} className="border border-grafite-700 rounded-lg p-3 bg-grafite-900/30">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-sm font-bold text-gray-100">{cat.name}</h4>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-grafite-700 text-gray-400">
+                            {cat.selectionType === 'SINGLE' ? 'Escolha 1' : 'Varias'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {activeOpts.map((opt) => {
+                            const picked = pickedIds.has(opt.id)
+                            const pickInfo = picksNestaCat.find((p) => p.optionId === opt.id)
+                            return (
+                              <div
+                                key={opt.id}
+                                className={`rounded-lg border p-3 cursor-pointer transition-colors ${
+                                  picked
+                                    ? 'border-amarelo bg-amarelo/10'
+                                    : 'border-grafite-700 bg-grafite-800 hover:border-grafite-500'
+                                }`}
+                                onClick={() => togglePick(opt)}
+                              >
+                                <div className="flex items-start gap-2">
+                                  <input
+                                    type={cat.selectionType === 'SINGLE' ? 'radio' : 'checkbox'}
+                                    checked={picked}
+                                    readOnly
+                                    className="mt-1 h-4 w-4 text-amarelo"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-gray-100">{opt.name}</div>
+                                    <div className="flex items-center gap-3 text-xs mt-1">
+                                      {opt.unitPrice > 0 && (
+                                        <span className="text-amarelo">
+                                          {formatCurrency(opt.unitPrice)}
+                                        </span>
+                                      )}
+                                      {opt.tempoDias > 0 && (
+                                        <span className="text-gray-400">
+                                          +{opt.tempoDias}d
+                                        </span>
+                                      )}
+                                    </div>
+                                    {picked && cat.selectionType === 'MULTIPLE' && (
+                                      <div
+                                        className="flex items-center gap-2 mt-2"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <span className="text-xs text-gray-400">Qtd:</span>
+                                        <input
+                                          type="number"
+                                          min="0.5"
+                                          step="0.5"
+                                          value={pickInfo?.quantity || 1}
+                                          onChange={(e) => updateQty(opt.id, parseFloat(e.target.value) || 1)}
+                                          className="input-field text-xs py-1 w-20"
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {form.picks.length > 0 && (
+                    <div className="bg-grafite-900 rounded-lg p-3 text-sm space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Opcoes selecionadas:</span>
+                        <span className="text-gray-200">{form.picks.length}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Custo adicional:</span>
+                        <span className="text-amarelo font-medium">
+                          + {formatCurrency(calculation.custoPicks)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Dias adicionais:</span>
+                        <span className="text-amarelo font-medium">+ {calculation.diasPicks}d</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </AccordionSection>
+            )}
+
+            <AccordionSection id="items" title={form.type === 'VENDA' ? 'Produtos para Venda (serao descontados do estoque)' : 'Lista de Itens e Materiais'} activeSection={activeSection} onToggle={setActiveSection}>
               <div className="space-y-3">
                 {form.items.map((item, index) => (
                   <div
@@ -1025,85 +1359,176 @@ function BudgetFormPanel({
                   <Plus className="w-4 h-4" /> Adicionar Item
                 </button>
               </div>
-            </Section>
+            </AccordionSection>
 
-            {/* Payment Config */}
-            <Section id="payment" title="Como o cliente vai pagar? (Parcelas)">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-field">Entrada (%)</label>
-                  <input
-                    type="number"
-                    className="input-field"
-                    value={form.entryPercent}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value) || 0
-                      setForm((prev) => ({
-                        ...prev,
-                        entryPercent: val,
-                        deliveryPercent: 100 - val,
-                      }))
-                    }}
-                    min="0"
-                    max="100"
-                  />
-                </div>
-                <div>
-                  <label className="label-field">Entrega (%)</label>
-                  <input
-                    type="number"
-                    className="input-field"
-                    value={form.deliveryPercent}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value) || 0
-                      setForm((prev) => ({
-                        ...prev,
-                        deliveryPercent: val,
-                        entryPercent: 100 - val,
-                      }))
-                    }}
-                    min="0"
-                    max="100"
-                  />
-                </div>
+            {/* Payment Config — parcelas mistas (dinheiro + cartao, boleto, etc) */}
+            <AccordionSection id="payment" title="Como o cliente vai pagar? (Parcelas)" activeSection={activeSection} onToggle={setActiveSection}>
+              <p className="text-xs text-gray-500 mb-3">
+                Cada parcela pode ter forma e imposto proprios. Ex: entrada em dinheiro (sem imposto) + restante no cartao (com 5%).
+              </p>
+
+              <div className="space-y-3">
+                {form.payments.length === 0 ? (
+                  <div className="p-4 bg-grafite-800 rounded-lg border border-dashed border-grafite-600 text-center">
+                    <p className="text-sm text-gray-400 mb-3">
+                      Nenhuma parcela configurada. Por padrao sera criada uma parcela unica com o valor total.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => updateField('payments', [
+                        { method: 'DINHEIRO', amount: calculation.precoFinal * 0.5, taxRate: 0, dueOffset: 0 },
+                        { method: 'CARTAO', amount: calculation.precoFinal * 0.5, taxRate: 0, dueOffset: 30 },
+                      ])}
+                      className="btn-secondary text-sm"
+                    >
+                      Criar parcelas padrao (entrada + entrega)
+                    </button>
+                  </div>
+                ) : (
+                  form.payments.map((p, idx) => {
+                    const withTax = p.amount * (1 + p.taxRate / 100)
+                    return (
+                      <div key={idx} className="bg-grafite-800 rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-200">Parcela {idx + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => updateField('payments', form.payments.filter((_, i) => i !== idx))}
+                            className="text-red-400 hover:text-red-300"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div>
+                            <label className="label-field">Forma</label>
+                            <select
+                              className="select-field w-full"
+                              value={p.method}
+                              onChange={(e) => {
+                                const copy = [...form.payments]
+                                copy[idx] = { ...copy[idx], method: e.target.value }
+                                updateField('payments', copy)
+                              }}
+                            >
+                              {PAYMENT_METHODS.map((m) => (
+                                <option key={m.value} value={m.value}>{m.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="label-field">Valor Base (R$)</label>
+                            <input
+                              type="number"
+                              className="input-field"
+                              value={p.amount || ''}
+                              min="0"
+                              step="0.01"
+                              onChange={(e) => {
+                                const copy = [...form.payments]
+                                copy[idx] = { ...copy[idx], amount: parseFloat(e.target.value) || 0 }
+                                updateField('payments', copy)
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label className="label-field">Imposto/Taxa (%)</label>
+                            <input
+                              type="number"
+                              className="input-field"
+                              value={p.taxRate || ''}
+                              min="0"
+                              step="0.1"
+                              onChange={(e) => {
+                                const copy = [...form.payments]
+                                copy[idx] = { ...copy[idx], taxRate: parseFloat(e.target.value) || 0 }
+                                updateField('payments', copy)
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label className="label-field">Vence em (dias)</label>
+                            <input
+                              type="number"
+                              className="input-field"
+                              value={p.dueOffset ?? ''}
+                              min="0"
+                              onChange={(e) => {
+                                const copy = [...form.payments]
+                                copy[idx] = { ...copy[idx], dueOffset: parseInt(e.target.value, 10) || 0 }
+                                updateField('payments', copy)
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-400 text-right">
+                          Total desta parcela: <span className="text-amarelo font-bold">{formatCurrency(withTax)}</span>
+                          {p.taxRate > 0 && ` (base ${formatCurrency(p.amount)} + ${p.taxRate}%)`}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+
+                {form.payments.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => updateField('payments', [
+                      ...form.payments,
+                      { method: 'DINHEIRO', amount: 0, taxRate: 0, dueOffset: form.payments.length * 30 },
+                    ])}
+                    className="btn-secondary text-sm flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" /> Adicionar Parcela
+                  </button>
+                )}
+
+                {form.payments.length > 0 && (() => {
+                  const totalBase = form.payments.reduce((s, p) => s + p.amount, 0)
+                  const totalImposto = form.payments.reduce((s, p) => s + p.amount * (p.taxRate / 100), 0)
+                  const totalFinal = totalBase + totalImposto
+                  const diff = totalBase - calculation.precoFinal
+                  return (
+                    <div className="bg-grafite-900 rounded-lg p-3 text-sm space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Soma das parcelas (base):</span>
+                        <span className="text-gray-200 font-medium">{formatCurrency(totalBase)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Soma impostos/taxas adicionais:</span>
+                        <span className="text-red-400">+ {formatCurrency(totalImposto)}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-grafite-700 pt-1">
+                        <span className="text-gray-300 font-medium">Total que o cliente paga:</span>
+                        <span className="text-amarelo font-bold">{formatCurrency(totalFinal)}</span>
+                      </div>
+                      {Math.abs(diff) > 0.01 && (
+                        <p className="text-xs text-yellow-400 mt-1">
+                          {diff > 0
+                            ? `Atencao: parcelas somam ${formatCurrency(diff)} a mais que o preco final do orcamento (${formatCurrency(calculation.precoFinal)}).`
+                            : `Atencao: parcelas somam ${formatCurrency(-diff)} a menos que o preco final do orcamento (${formatCurrency(calculation.precoFinal)}).`}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
-              {form.entryPercent + form.deliveryPercent !== 100 && (
-                <p className="text-sm text-red-400 mt-2">
-                  Atencao: Entrada + Entrega devem somar 100%
-                </p>
-              )}
-              {calculation.precoFinal > 0 && (
-                <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
-                  <div className="p-3 bg-grafite-800 rounded-lg border border-grafite-700">
-                    <span className="text-gray-400">Valor Entrada:</span>
-                    <p className="text-amarelo font-bold">
-                      {formatCurrency(calculation.precoFinal * (form.entryPercent / 100))}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-grafite-800 rounded-lg border border-grafite-700">
-                    <span className="text-gray-400">Valor Entrega:</span>
-                    <p className="text-amarelo font-bold">
-                      {formatCurrency(calculation.precoFinal * (form.deliveryPercent / 100))}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </Section>
+            </AccordionSection>
 
             {/* Images */}
-            <Section id="images" title="Fotos e Imagens de Referencia">
+            <AccordionSection id="images" title="Fotos e Imagens de Referencia" activeSection={activeSection} onToggle={setActiveSection}>
               <BudgetImageUpload form={form} setForm={setForm} />
-            </Section>
+            </AccordionSection>
 
             {/* Notes */}
-            <Section id="notes" title="Observacoes e Anotacoes">
+            <AccordionSection id="notes" title="Observacoes e Anotacoes" activeSection={activeSection} onToggle={setActiveSection}>
               <textarea
                 className="input-field min-h-[100px] resize-y"
                 value={form.notes}
                 onChange={(e) => updateField('notes', e.target.value)}
                 placeholder="Observacoes adicionais sobre o orcamento..."
               />
-            </Section>
+            </AccordionSection>
           </div>
 
           {/* Calculation Summary Panel (Right) */}
@@ -1295,6 +1720,7 @@ export default function ComercialPage() {
   const [materials, setMaterials] = useState<Material[]>([])
   const [products, setProducts] = useState<ProductData[]>([])
   const [clients, setClients] = useState<ClientData[]>([])
+  const [configCategories, setConfigCategories] = useState<ConfiguratorCategoryData[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<BudgetForm>(emptyForm())
@@ -1305,18 +1731,20 @@ export default function ComercialPage() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [budgetsRes, employeesRes, materialsRes, productsRes, clientsRes] = await Promise.all([
+      const [budgetsRes, employeesRes, materialsRes, productsRes, clientsRes, configRes] = await Promise.all([
         fetch('/api/budgets'),
         fetch('/api/employees'),
         fetch('/api/materials'),
         fetch('/api/products'),
         fetch('/api/clients'),
+        fetch('/api/configurator/categories'),
       ])
       if (budgetsRes.ok) setBudgets(await budgetsRes.json())
       if (employeesRes.ok) setEmployees(await employeesRes.json())
       if (materialsRes.ok) setMaterials(await materialsRes.json())
       if (productsRes.ok) setProducts(await productsRes.json())
       if (clientsRes.ok) setClients(await clientsRes.json())
+      if (configRes.ok) setConfigCategories(await configRes.json())
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
     }
@@ -1353,6 +1781,23 @@ export default function ComercialPage() {
       entryPercent: budget.entryPercent,
       deliveryPercent: budget.deliveryPercent,
       taxRate: budget.taxRate,
+      modoCalculo: ((budget as any).modoCalculo === 'OPERACIONAL' ? 'OPERACIONAL' : 'MANUAL') as 'MANUAL' | 'OPERACIONAL',
+      diasExecucao: (budget as any).diasExecucao || 0,
+      custoOperacionalDia: (budget as any).custoOperacionalDia || 0,
+      payments: ((budget as any).payments || []).map((p: any) => ({
+        method: p.method,
+        amount: p.amount,
+        taxRate: p.taxRate || 0,
+        dueOffset: p.dueOffset || 0,
+      })),
+      picks: ((budget as any).configuratorPicks || []).map((p: any) => ({
+        optionId: p.optionId || '',
+        optionName: p.optionName,
+        categoryName: p.categoryName,
+        unitPrice: p.unitPrice,
+        tempoDias: p.tempoDias,
+        quantity: p.quantity || 1,
+      })),
       notes: budget.notes || '',
       items: budget.items.map((item) => ({
         materialId: item.materialId || undefined,
@@ -1396,6 +1841,11 @@ export default function ComercialPage() {
       entryPercent: form.entryPercent,
       deliveryPercent: form.deliveryPercent,
       taxRate: form.taxRate,
+      modoCalculo: form.modoCalculo,
+      diasExecucao: form.diasExecucao,
+      custoOperacionalDia: form.custoOperacionalDia,
+      payments: form.payments,
+      picks: form.picks,
       notes: form.notes,
       existingImages: form.existingImages.join('|||'),
       items: form.items.filter((item) => item.description.trim()),
@@ -1610,6 +2060,7 @@ export default function ComercialPage() {
           materials={materials}
           products={products}
           clients={clients}
+          configCategories={configCategories}
           onSave={handleSave}
           onClose={() => setShowForm(false)}
           saving={saving}
