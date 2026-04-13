@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth, requireAllowedPage } from '@/lib/auth'
 import { enforceRateLimit, totalImagesSize } from '@/lib/api-helpers'
 
-const MAX_TOTAL_IMAGES_BYTES = 10 * 1024 * 1024 // 10MB agregado por produto
+const MAX_TOTAL_IMAGES_BYTES = 25 * 1024 * 1024 // 25MB agregado por produto
 
 export async function GET() {
   const { error } = await requireAuth()
@@ -42,15 +42,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Nome obrigatorio' }, { status: 400 })
     }
 
-    // Handle image uploads - convert to base64 data URI (max 5MB per file)
-    const MAX_IMAGE_SIZE = 5 * 1024 * 1024
+    // Handle image uploads - convert to base64 data URI (max 10MB per file)
+    const MAX_IMAGE_SIZE = 10 * 1024 * 1024
     const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
     const imageDataUris: string[] = []
     const files = formData.getAll('images') as File[]
     for (const file of files) {
       if (file.size > 0) {
         if (file.size > MAX_IMAGE_SIZE) {
-          return NextResponse.json({ error: 'Imagem muito grande (max 5MB)' }, { status: 400 })
+          return NextResponse.json({ error: 'Imagem muito grande (max 10MB)' }, { status: 400 })
         }
         const mimeType = file.type || 'image/jpeg'
         if (!ALLOWED_TYPES.includes(mimeType)) {
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     const joinedImages = imageDataUris.length > 0 ? imageDataUris.join('|||') : null
     if (totalImagesSize(joinedImages) > MAX_TOTAL_IMAGES_BYTES) {
-      return NextResponse.json({ error: 'Total de imagens excede 10MB por produto' }, { status: 400 })
+      return NextResponse.json({ error: 'Total de imagens excede 25MB por produto' }, { status: 400 })
     }
 
     const product = await prisma.product.create({
@@ -115,15 +115,15 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Produto nao encontrado' }, { status: 404 })
     }
 
-    // Handle new image uploads - convert to base64 data URI (max 5MB per file)
-    const MAX_IMAGE_SIZE = 5 * 1024 * 1024
+    // Handle new image uploads - convert to base64 data URI (max 10MB per file)
+    const MAX_IMAGE_SIZE = 10 * 1024 * 1024
     const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
     const newImageDataUris: string[] = []
     const files = formData.getAll('images') as File[]
     for (const file of files) {
       if (file.size > 0) {
         if (file.size > MAX_IMAGE_SIZE) {
-          return NextResponse.json({ error: 'Imagem muito grande (max 5MB)' }, { status: 400 })
+          return NextResponse.json({ error: 'Imagem muito grande (max 10MB)' }, { status: 400 })
         }
         const mimeType = file.type || 'image/jpeg'
         if (!ALLOWED_TYPES.includes(mimeType)) {
@@ -142,7 +142,7 @@ export async function PUT(request: NextRequest) {
     const joinedImages = allImages.length > 0 ? allImages.join('|||') : null
 
     if (totalImagesSize(joinedImages) > MAX_TOTAL_IMAGES_BYTES) {
-      return NextResponse.json({ error: 'Total de imagens excede 10MB por produto' }, { status: 400 })
+      return NextResponse.json({ error: 'Total de imagens excede 25MB por produto' }, { status: 400 })
     }
 
     const product = await prisma.product.update({

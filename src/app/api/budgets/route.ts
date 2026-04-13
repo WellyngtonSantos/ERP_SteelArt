@@ -4,7 +4,7 @@ import { calcOrcamento, calcValorHora } from '@/lib/calculations'
 import { requireAuth, requireAllowedPage } from '@/lib/auth'
 import { enforceRateLimit, totalImagesSize, ValidationError, apiErrorResponse } from '@/lib/api-helpers'
 
-const MAX_TOTAL_IMAGES_BYTES = 10 * 1024 * 1024 // 10MB agregado por orcamento
+const MAX_TOTAL_IMAGES_BYTES = 25 * 1024 * 1024 // 25MB agregado por orcamento
 
 async function parseRequestBody(request: NextRequest) {
   const contentType = request.headers.get('content-type') || ''
@@ -14,14 +14,14 @@ async function parseRequestBody(request: NextRequest) {
     const dataStr = formData.get('data') as string
     const body = JSON.parse(dataStr)
 
-    // Handle image uploads - convert to base64 data URI (max 5MB per file)
-    const MAX_IMAGE_SIZE = 5 * 1024 * 1024
+    // Handle image uploads - convert to base64 data URI (max 10MB per file)
+    const MAX_IMAGE_SIZE = 10 * 1024 * 1024
     const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
     const imageDataUris: string[] = []
     const files = formData.getAll('images') as File[]
     for (const file of files) {
       if (file.size > 0) {
-        if (file.size > MAX_IMAGE_SIZE) throw new ValidationError('Imagem muito grande (max 5MB)')
+        if (file.size > MAX_IMAGE_SIZE) throw new ValidationError('Imagem muito grande (max 10MB)')
         const mimeType = file.type || 'image/jpeg'
         if (!ALLOWED_TYPES.includes(mimeType)) throw new ValidationError('Tipo de imagem nao permitido')
         const bytes = await file.arrayBuffer()
@@ -37,7 +37,7 @@ async function parseRequestBody(request: NextRequest) {
     delete body.existingImages
 
     if (totalImagesSize(body.images) > MAX_TOTAL_IMAGES_BYTES) {
-      throw new ValidationError('Total de imagens excede 10MB por orcamento')
+      throw new ValidationError('Total de imagens excede 25MB por orcamento')
     }
     return body
   }
@@ -49,7 +49,7 @@ async function parseRequestBody(request: NextRequest) {
     delete body.existingImages
   }
   if (totalImagesSize(body.images) > MAX_TOTAL_IMAGES_BYTES) {
-    throw new Error('Total de imagens excede 10MB por orcamento')
+    throw new Error('Total de imagens excede 25MB por orcamento')
   }
   return body
 }
