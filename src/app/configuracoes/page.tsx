@@ -147,6 +147,8 @@ export default function ConfiguracoesPage() {
   const [newCategoryType, setNewCategoryType] = useState<'SINGLE' | 'MULTIPLE'>('SINGLE')
   const [expandedCatId, setExpandedCatId] = useState<string | null>(null)
   const [newOption, setNewOption] = useState<Record<string, { name: string; unitPrice: number; tempoDias: number }>>({})
+  const [seeding, setSeeding] = useState(false)
+  const [seedResult, setSeedResult] = useState<string>('')
 
   const { refreshTheme } = useTheme()
 
@@ -320,6 +322,31 @@ export default function ConfiguracoesPage() {
       await fetchConfigCategories()
     } catch {
       setConfigError('Erro de conexao')
+    }
+  }
+
+  const runConfiguratorSeed = async () => {
+    if (!confirm('Isso vai criar 6 categorias (Cobertura, Revestimento, Piso, Climatizacao, Iluminacao, Extras) com ~37 opcoes tipicas de chale. Preciso de admin. Continuar?')) return
+    setSeeding(true)
+    setSeedResult('')
+    setConfigError('')
+    try {
+      const res = await fetch('/api/seed/configurator', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        setConfigError(data.error || 'Erro ao rodar seed')
+        return
+      }
+      setSeedResult(
+        `${data.categoriesCreated} categorias criadas (${data.categoriesExisting} ja existiam), ` +
+        `${data.optionsCreated} opcoes criadas (${data.optionsExisting} ja existiam).`
+      )
+      await fetchConfigCategories()
+      setTimeout(() => setSeedResult(''), 10000)
+    } catch {
+      setConfigError('Erro de conexao')
+    } finally {
+      setSeeding(false)
     }
   }
 
@@ -1067,15 +1094,35 @@ export default function ConfiguracoesPage() {
       {/* Configurador Tab — Monte o seu */}
       {activeTab === 'configurador' && (
         <div className="space-y-6">
-          <div>
-            <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider">
-              Configurador "Monte o seu"
-            </h3>
-            <p className="text-xs text-gray-500 mt-1">
-              Cadastre categorias (cobertura, revestimento, piso, opcionais...) e dentro de cada uma as opcoes disponiveis com preco e tempo.
-              No orcamento o usuario vai marcar as opcoes e o preco + dias serao somados automaticamente.
-            </p>
+          <div className="flex items-start justify-between flex-wrap gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider">
+                Configurador "Monte o seu"
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Cadastre categorias (cobertura, revestimento, piso, opcionais...) e dentro de cada uma as opcoes disponiveis com preco e tempo.
+                No orcamento o usuario vai marcar as opcoes e o preco + dias serao somados automaticamente.
+              </p>
+            </div>
+            <button
+              onClick={runConfiguratorSeed}
+              disabled={seeding}
+              className="btn-secondary text-sm px-3 py-2 disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
+              title="Popula com 6 categorias e ~37 opcoes tipicas de chale"
+            >
+              {seeding ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Populando...</>
+              ) : (
+                <>✨ Popular com dados de exemplo</>
+              )}
+            </button>
           </div>
+
+          {seedResult && (
+            <div className="bg-green-900/40 border border-green-700 text-green-200 px-4 py-2 rounded-lg text-sm">
+              {seedResult}
+            </div>
+          )}
 
           {configError && (
             <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-2 rounded-lg text-sm">
