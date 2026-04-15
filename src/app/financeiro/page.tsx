@@ -76,7 +76,7 @@ interface TaxConfig {
   active: boolean
 }
 
-type Tab = 'todos' | 'receber' | 'pagar' | 'fixos' | 'impostos'
+type Tab = 'todos' | 'receber' | 'pagar' | 'fixos' | 'impostos' | 'integracoes'
 
 const STATUS_COLORS: Record<string, string> = {
   PENDENTE: 'bg-yellow-900/50 text-yellow-400',
@@ -503,6 +503,7 @@ export default function FinanceiroPage() {
     { key: 'pagar', label: 'Contas a Pagar' },
     { key: 'fixos', label: 'Custos Fixos' },
     { key: 'impostos', label: 'Impostos' },
+    { key: 'integracoes', label: 'Integracoes' },
   ]
 
   // Abrir modal pra editar lancamento existente
@@ -1363,6 +1364,306 @@ export default function FinanceiroPage() {
               ))
             )}
           </div>
+        </div>
+      )}
+
+      {/* Integracoes (mockup de apresentacao) */}
+      {activeTab === 'integracoes' && (
+        <div className="space-y-6">
+          <div className="card">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-amarelo/10 border border-amarelo/30 flex items-center justify-center flex-shrink-0">
+                <span className="text-amarelo text-lg">⚡</span>
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-100">Integracoes Bancarias e Fiscais</h2>
+                <p className="text-sm text-gray-400 mt-1">
+                  Automatize tarefas que hoje voce faz manualmente: sincronizar extratos, emitir notas fiscais, conciliar boletos.
+                  Os precos abaixo sao referencias de mercado para dimensionar o investimento.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Card 1: Open Finance */}
+            <div className="card border-l-4 border-blue-500/70">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-blue-900/30 border border-blue-500/30 flex items-center justify-center">
+                    <span className="text-blue-400 text-lg">🏦</span>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-100">Sincronizacao Bancaria (Open Finance)</h3>
+                    <p className="text-[11px] text-gray-500 uppercase tracking-wider">Extrato + saldo em tempo real</p>
+                  </div>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-700 text-gray-400">Nao ativo</span>
+              </div>
+              <p className="text-xs text-gray-400 mb-3">
+                Conecta diretamente aos bancos do SteelArt (Banco A, B, Sicred, Helio, Jonathan) e puxa extratos e saldos automaticamente.
+                Adeus digitacao manual de cada movimentacao.
+              </p>
+              <ul className="text-xs text-gray-300 space-y-1 mb-4">
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Lancamentos do banco viram receitas/despesas automaticamente</li>
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Saldo real de cada banco no dashboard</li>
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Concilia pagamentos recebidos com orcamentos aprovados</li>
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Funciona com todos os bancos certificados pelo BC</li>
+              </ul>
+              <div className="border-t border-grafite-700 pt-3 space-y-2">
+                <p className="text-[11px] text-gray-500 uppercase tracking-wider">Providers compativeis</p>
+                <div className="grid grid-cols-3 gap-2 text-[11px]">
+                  <div className="bg-grafite-800 rounded p-2 border border-grafite-700">
+                    <p className="font-semibold text-gray-200">Pluggy</p>
+                    <p className="text-gray-400">R$ 500 - 1.200/mes</p>
+                  </div>
+                  <div className="bg-grafite-800 rounded p-2 border border-grafite-700">
+                    <p className="font-semibold text-gray-200">Belvo</p>
+                    <p className="text-gray-400">R$ 800 - 1.500/mes</p>
+                  </div>
+                  <div className="bg-grafite-800 rounded p-2 border border-grafite-700">
+                    <p className="font-semibold text-gray-200">Klavi</p>
+                    <p className="text-gray-400">R$ 600 - 1.000/mes</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-500">+ setup unico R$ 0 a R$ 2.500 conforme provider. Implantacao: 2 a 3 semanas.</p>
+              </div>
+              <button
+                onClick={() => alert('Demo: em produto final, este botao abriria o wizard de OAuth com o banco escolhido.')}
+                className="btn-secondary w-full text-sm mt-3"
+              >
+                Ver demonstracao
+              </button>
+            </div>
+
+            {/* Card 2: Emissao NF-e */}
+            <div className="card border-l-4 border-green-500/70">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-green-900/30 border border-green-500/30 flex items-center justify-center">
+                    <span className="text-green-400 text-lg">📄</span>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-100">Emissao de NF-e</h3>
+                    <p className="text-[11px] text-gray-500 uppercase tracking-wider">Nota fiscal eletronica</p>
+                  </div>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-700 text-gray-400">Nao ativo</span>
+              </div>
+              <p className="text-xs text-gray-400 mb-3">
+                Emite NF-e direto do orcamento aprovado. Sem precisar abrir outro sistema, sem retrabalho de digitacao, sem risco de inconsistencia entre o orcamento e a nota.
+              </p>
+              <ul className="text-xs text-gray-300 space-y-1 mb-4">
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Botao &quot;Emitir NF-e&quot; na tela do orcamento aprovado</li>
+                <li className="flex gap-2"><span className="text-green-400">✓</span> XML + DANFE (PDF) gerados automatico</li>
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Cancelamento e correcao diretamente no sistema</li>
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Historico de todas as NFes emitidas</li>
+              </ul>
+              <div className="border-t border-grafite-700 pt-3 space-y-2">
+                <p className="text-[11px] text-gray-500 uppercase tracking-wider">Providers compativeis</p>
+                <div className="grid grid-cols-3 gap-2 text-[11px]">
+                  <div className="bg-grafite-800 rounded p-2 border border-grafite-700">
+                    <p className="font-semibold text-gray-200">Focus NFe</p>
+                    <p className="text-gray-400">R$ 49 - 249/mes</p>
+                  </div>
+                  <div className="bg-grafite-800 rounded p-2 border border-grafite-700">
+                    <p className="font-semibold text-gray-200">PlugNotas</p>
+                    <p className="text-gray-400">R$ 79 - 299/mes</p>
+                  </div>
+                  <div className="bg-grafite-800 rounded p-2 border border-grafite-700">
+                    <p className="font-semibold text-gray-200">NFe.io</p>
+                    <p className="text-gray-400">R$ 60 - 200/mes</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-500">+ Certificado digital A1: R$ 180 a R$ 280/ano. Implantacao: 1 a 2 semanas.</p>
+              </div>
+              <button
+                onClick={() => alert('Demo: em producao, este botao abriria o cadastro NCM/CFOP + upload do certificado A1.')}
+                className="btn-secondary w-full text-sm mt-3"
+              >
+                Ver demonstracao
+              </button>
+            </div>
+
+            {/* Card 3: DDA boletos */}
+            <div className="card border-l-4 border-purple-500/70">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-purple-900/30 border border-purple-500/30 flex items-center justify-center">
+                    <span className="text-purple-400 text-lg">🧾</span>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-100">DDA - Boletos Automaticos</h3>
+                    <p className="text-[11px] text-gray-500 uppercase tracking-wider">Receber boletos direto no sistema</p>
+                  </div>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-700 text-gray-400">Nao ativo</span>
+              </div>
+              <p className="text-xs text-gray-400 mb-3">
+                Todo boleto emitido contra o CNPJ da SteelArt chega direto no sistema. Nao precisa mais abrir o internet banking toda segunda pra ver &quot;o que esta por pagar&quot;.
+              </p>
+              <ul className="text-xs text-gray-300 space-y-1 mb-4">
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Lista automatica de todos os boletos em aberto</li>
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Alerta por e-mail ou WhatsApp de vencimento</li>
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Pagamento com 1 clique (via Pix ou agendamento)</li>
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Historico + comprovantes arquivados automatico</li>
+              </ul>
+              <div className="border-t border-grafite-700 pt-3 space-y-2">
+                <p className="text-[11px] text-gray-500 uppercase tracking-wider">Providers compativeis</p>
+                <div className="grid grid-cols-3 gap-2 text-[11px]">
+                  <div className="bg-grafite-800 rounded p-2 border border-grafite-700">
+                    <p className="font-semibold text-gray-200">Pluggy DDA</p>
+                    <p className="text-gray-400">Incluso no Open Finance</p>
+                  </div>
+                  <div className="bg-grafite-800 rounded p-2 border border-grafite-700">
+                    <p className="font-semibold text-gray-200">Asaas</p>
+                    <p className="text-gray-400">R$ 0 - 49/mes + taxa</p>
+                  </div>
+                  <div className="bg-grafite-800 rounded p-2 border border-grafite-700">
+                    <p className="font-semibold text-gray-200">Iugu</p>
+                    <p className="text-gray-400">R$ 0 + 1,99%/boleto</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-500">Se Open Finance ja estiver contratado, DDA vem junto. Implantacao: 1 semana.</p>
+              </div>
+              <button
+                onClick={() => alert('Demo: em producao, este botao conectaria o DDA via provider contratado.')}
+                className="btn-secondary w-full text-sm mt-3"
+              >
+                Ver demonstracao
+              </button>
+            </div>
+
+            {/* Card 4: OCR boletos */}
+            <div className="card border-l-4 border-amarelo/70">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-amarelo/10 border border-amarelo/30 flex items-center justify-center">
+                    <span className="text-amarelo text-lg">📷</span>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-100">Leitura Automatica de Boletos</h3>
+                    <p className="text-[11px] text-gray-500 uppercase tracking-wider">OCR do codigo de barras</p>
+                  </div>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-900/50 text-green-400">Base ja existe</span>
+              </div>
+              <p className="text-xs text-gray-400 mb-3">
+                Alternativa barata ao DDA enquanto o Open Finance nao esta contratado. Ao anexar o boleto (PDF ou foto) no lancamento de despesa,
+                o sistema le o codigo de barras e ja preenche valor + vencimento.
+              </p>
+              <ul className="text-xs text-gray-300 space-y-1 mb-4">
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Ja temos upload de boleto (funcionalidade atual)</li>
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Leitura automatica de valor + vencimento + banco emissor</li>
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Preenchimento automatico do lancamento</li>
+                <li className="flex gap-2"><span className="text-green-400">✓</span> Sem custo de API: biblioteca open-source</li>
+              </ul>
+              <div className="border-t border-grafite-700 pt-3 space-y-2">
+                <p className="text-[11px] text-gray-500 uppercase tracking-wider">Tecnologia</p>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="bg-grafite-800 rounded p-2 border border-grafite-700">
+                    <p className="font-semibold text-gray-200">zxing (barcode)</p>
+                    <p className="text-gray-400">R$ 0/mes</p>
+                  </div>
+                  <div className="bg-grafite-800 rounded p-2 border border-grafite-700">
+                    <p className="font-semibold text-gray-200">Tesseract OCR</p>
+                    <p className="text-gray-400">R$ 0/mes</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-500">Implementacao: 1 semana de desenvolvimento. Sem custo recorrente.</p>
+              </div>
+              <button
+                onClick={() => alert('Demo: anexe um boleto em qualquer lancamento de despesa. Em producao, o OCR preencheria valor + vencimento automaticamente.')}
+                className="btn-secondary w-full text-sm mt-3"
+              >
+                Ver demonstracao
+              </button>
+            </div>
+          </div>
+
+          {/* Resumo de custos */}
+          <div className="card border border-amarelo/30 bg-amarelo/5">
+            <h3 className="text-sm font-bold text-amarelo uppercase tracking-wider mb-4">Resumo de Custos - Pacote Completo</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="table-header">
+                    <th className="px-3 py-2 text-left">Integracao</th>
+                    <th className="px-3 py-2 text-left">Provider sugerido</th>
+                    <th className="px-3 py-2 text-right">Setup unico</th>
+                    <th className="px-3 py-2 text-right">Mensal</th>
+                    <th className="px-3 py-2 text-right">Anual</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="table-row">
+                    <td className="px-3 py-2 text-gray-200">Open Finance (bancos)</td>
+                    <td className="px-3 py-2 text-gray-400">Pluggy</td>
+                    <td className="px-3 py-2 text-right text-gray-400">R$ 1.500</td>
+                    <td className="px-3 py-2 text-right text-gray-200">R$ 800</td>
+                    <td className="px-3 py-2 text-right text-gray-200">R$ 9.600</td>
+                  </tr>
+                  <tr className="table-row">
+                    <td className="px-3 py-2 text-gray-200">Emissao NF-e</td>
+                    <td className="px-3 py-2 text-gray-400">Focus NFe</td>
+                    <td className="px-3 py-2 text-right text-gray-400">R$ 220 (cert)</td>
+                    <td className="px-3 py-2 text-right text-gray-200">R$ 149</td>
+                    <td className="px-3 py-2 text-right text-gray-200">R$ 1.788</td>
+                  </tr>
+                  <tr className="table-row">
+                    <td className="px-3 py-2 text-gray-200">DDA boletos</td>
+                    <td className="px-3 py-2 text-gray-400">Incluso no Pluggy</td>
+                    <td className="px-3 py-2 text-right text-gray-500">—</td>
+                    <td className="px-3 py-2 text-right text-gray-500">—</td>
+                    <td className="px-3 py-2 text-right text-gray-500">—</td>
+                  </tr>
+                  <tr className="table-row">
+                    <td className="px-3 py-2 text-gray-200">Leitura de boleto (OCR)</td>
+                    <td className="px-3 py-2 text-gray-400">Interno (open-source)</td>
+                    <td className="px-3 py-2 text-right text-gray-400">R$ 0</td>
+                    <td className="px-3 py-2 text-right text-gray-200">R$ 0</td>
+                    <td className="px-3 py-2 text-right text-gray-200">R$ 0</td>
+                  </tr>
+                  <tr className="border-t-2 border-amarelo/40 font-bold">
+                    <td className="px-3 py-3 text-amarelo" colSpan={2}>TOTAL ESTIMADO</td>
+                    <td className="px-3 py-3 text-right text-amarelo">R$ 1.720</td>
+                    <td className="px-3 py-3 text-right text-amarelo">R$ 949</td>
+                    <td className="px-3 py-3 text-right text-amarelo">R$ 11.388</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-gray-500 mt-3">
+              * Valores de referencia do mercado em abril/2026. Conforme o volume real de NFes e transacoes bancarias, os planos podem ser dimensionados pra mais ou menos.
+              O setup unico inclui certificado A1 (R$ 220) + implantacao Pluggy (R$ 1.500).
+            </p>
+          </div>
+
+          {/* Retorno sobre investimento */}
+          <div className="card">
+            <h3 className="text-sm font-bold text-gray-100 uppercase tracking-wider mb-3">Retorno esperado</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="bg-grafite-800 rounded-lg p-4">
+                <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-1">Tempo economizado</p>
+                <p className="text-2xl font-bold text-green-400">~8h/mes</p>
+                <p className="text-xs text-gray-400 mt-1">Deixa de lancar extrato e boletos manualmente</p>
+              </div>
+              <div className="bg-grafite-800 rounded-lg p-4">
+                <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-1">Erros evitados</p>
+                <p className="text-2xl font-bold text-blue-400">&gt; 95%</p>
+                <p className="text-xs text-gray-400 mt-1">Conciliacao automatica elimina digitacao errada</p>
+              </div>
+              <div className="bg-grafite-800 rounded-lg p-4">
+                <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-1">Compliance fiscal</p>
+                <p className="text-2xl font-bold text-amarelo">100%</p>
+                <p className="text-xs text-gray-400 mt-1">NF-e emitida na hora, sem risco de autuacao</p>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500 text-center italic">
+            Esta tela e uma demonstracao das integracoes disponiveis. Os valores sao referencias de mercado e a ativacao real requer contratacao dos providers correspondentes.
+          </p>
         </div>
       )}
 
