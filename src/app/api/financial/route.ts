@@ -133,6 +133,7 @@ export async function POST(request: NextRequest) {
         code,
         type,
         category: body.category || '',
+        group: body.group || null,
         description: body.description || '',
         amount: parseFloat(body.amount) || 0,
         dueDate: new Date(body.dueDate),
@@ -141,6 +142,7 @@ export async function POST(request: NextRequest) {
         attachmentData: body.attachmentData || null,
         attachmentName: body.attachmentName || null,
         bankName: body.bankName || null,
+        paymentMethod: body.paymentMethod || null,
         categoryName: body.categoryName || null,
         groupName: body.groupName || null,
         budgetId: body.budgetId || null,
@@ -171,6 +173,7 @@ export async function PUT(request: NextRequest) {
     const data: any = {}
     if (body.type !== undefined) data.type = body.type
     if (body.category !== undefined) data.category = body.category
+    if (body.group !== undefined) data.group = body.group || null
     if (body.description !== undefined) data.description = body.description
     if (body.amount !== undefined) data.amount = parseFloat(body.amount)
     if (body.dueDate !== undefined) data.dueDate = new Date(body.dueDate)
@@ -179,6 +182,7 @@ export async function PUT(request: NextRequest) {
     if (body.attachmentData !== undefined) data.attachmentData = body.attachmentData || null
     if (body.attachmentName !== undefined) data.attachmentName = body.attachmentName || null
     if (body.bankName !== undefined) data.bankName = body.bankName || null
+    if (body.paymentMethod !== undefined) data.paymentMethod = body.paymentMethod || null
     if (body.categoryName !== undefined) data.categoryName = body.categoryName || null
     if (body.groupName !== undefined) data.groupName = body.groupName || null
     if (body.budgetId !== undefined) data.budgetId = body.budgetId

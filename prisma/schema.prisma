@@ -182,6 +182,7 @@ model FinancialEntry {
   code           String?   @unique // Ex: DSP-2026-0001, RCB-2026-0001 — rastreavel humano
   type           String    // RECEITA, DESPESA
   category       String    // Classificacao do sistema: PARCELA, FORNECEDOR, CUSTO_FIXO, VALE, OUTROS
+  group          String?   // RECEITA_PRINCIPAL, RECEITA_OUTRAS, CUSTO_FIXO, CUSTO_VARIAVEL
   description    String
   amount         Float
   dueDate        DateTime
@@ -190,8 +191,9 @@ model FinancialEntry {
   attachmentData String?   // Boleto anexo (base64 data URI PDF ou imagem)
   attachmentName String?   // Nome original do arquivo do boleto
   bankName       String?   // Banco onde foi pago (gerenciado em Configuracoes)
-  categoryName   String?   // Categoria user-defined (gerenciada em Configuracoes)
-  groupName      String?   // Agrupador user-defined (gerenciado em Configuracoes)
+  paymentMethod  String?   // Forma de pagamento (Boleto, Cartao, PIX, Bric, Dinheiro, ...)
+  categoryName   String?   // Legado: Categoria user-defined (gerenciada em Configuracoes)
+  groupName      String?   // Legado: Agrupador user-defined (gerenciado em Configuracoes)
   budgetId       String?
   budget         Budget?   @relation(fields: [budgetId], references: [id])
   projectId      String?

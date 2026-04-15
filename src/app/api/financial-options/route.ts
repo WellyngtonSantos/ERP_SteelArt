@@ -3,11 +3,26 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth, requireAllowedPage } from '@/lib/auth'
 import { ValidationError, apiErrorResponse } from '@/lib/api-helpers'
 
-const VALID_TYPES = ['BANK', 'CATEGORY', 'GROUP']
+// BANK/CATEGORY/GROUP: tipos legados (mantidos pra nao quebrar lancamentos antigos)
+// PAYMENT_METHOD: formas de pagamento (Boleto, Cartao, PIX, Bric, Dinheiro...)
+// INCOME_MAIN: receitas principais (clientes/vendas)
+// INCOME_OTHER: receitas outras (investimentos, outros)
+// COST_FIXED: custos fixos (aluguel, agua, energia...)
+// COST_VARIABLE: custos variaveis (manutencao, combustivel, frete...)
+const VALID_TYPES = [
+  'BANK',
+  'CATEGORY',
+  'GROUP',
+  'PAYMENT_METHOD',
+  'INCOME_MAIN',
+  'INCOME_OTHER',
+  'COST_FIXED',
+  'COST_VARIABLE',
+]
 
 function validateType(type: string | null): string {
   if (!type || !VALID_TYPES.includes(type)) {
-    throw new ValidationError('Tipo invalido. Use BANK, CATEGORY ou GROUP.')
+    throw new ValidationError(`Tipo invalido. Use um de: ${VALID_TYPES.join(', ')}.`)
   }
   return type
 }

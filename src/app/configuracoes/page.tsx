@@ -11,7 +11,6 @@ import {
   Eye,
   Upload,
   Trash2,
-  Monitor,
   History,
   Sparkles,
   Bug,
@@ -75,13 +74,32 @@ const CHANGELOG_COLORS: Record<string, string> = {
   other: 'text-gray-400 bg-gray-400/10 border-gray-400/30',
 }
 
+type FinOptionType =
+  | 'BANK'
+  | 'CATEGORY'
+  | 'GROUP'
+  | 'PAYMENT_METHOD'
+  | 'INCOME_MAIN'
+  | 'INCOME_OTHER'
+  | 'COST_FIXED'
+  | 'COST_VARIABLE'
+
 interface FinancialOption {
   id: string
-  type: 'BANK' | 'CATEGORY' | 'GROUP'
+  type: FinOptionType
   name: string
   active: boolean
   order: number
 }
+
+const FIN_TAB_SECTIONS: Array<{ type: FinOptionType; label: string; help: string; placeholder: string }> = [
+  { type: 'BANK', label: 'Bancos', help: 'Ex: Banco A, Banco B, Banco Sicred, Helio, Jonathan', placeholder: 'Novo banco' },
+  { type: 'PAYMENT_METHOD', label: 'Formas de Pagamento', help: 'Ex: Boleto, Cartao, PIX, Bric, Dinheiro', placeholder: 'Nova forma de pagamento' },
+  { type: 'INCOME_MAIN', label: 'Receitas Principais', help: 'Clientes e vendas (ex: Rafael Race Parts, Chiodini)', placeholder: 'Nova receita principal' },
+  { type: 'INCOME_OTHER', label: 'Receitas Outras', help: 'Ex: Investimentos, Outros', placeholder: 'Nova receita extra' },
+  { type: 'COST_FIXED', label: 'Custos Fixos', help: 'Ex: Aluguel, Agua, Energia, Internet', placeholder: 'Novo custo fixo' },
+  { type: 'COST_VARIABLE', label: 'Custos Variaveis', help: 'Ex: Combustivel, Manutencao, Frete, Pro-Labore', placeholder: 'Novo custo variavel' },
+]
 
 interface ConfiguratorOption {
   id: string
@@ -135,9 +153,18 @@ export default function ConfiguracoesPage() {
   const [finOptions, setFinOptions] = useState<FinancialOption[]>([])
   const [finLoading, setFinLoading] = useState(false)
   const [finError, setFinError] = useState('')
-  const [newFinName, setNewFinName] = useState<Record<string, string>>({ BANK: '', CATEGORY: '', GROUP: '' })
+  const [newFinName, setNewFinName] = useState<Record<string, string>>({
+    BANK: '',
+    PAYMENT_METHOD: '',
+    INCOME_MAIN: '',
+    INCOME_OTHER: '',
+    COST_FIXED: '',
+    COST_VARIABLE: '',
+  })
   const [editingFinId, setEditingFinId] = useState<string | null>(null)
   const [editingFinName, setEditingFinName] = useState('')
+  const [finSeeding, setFinSeeding] = useState(false)
+  const [finSeedResult, setFinSeedResult] = useState('')
 
   // Configurador state
   const [configCategories, setConfigCategories] = useState<ConfiguratorCategory[]>([])
@@ -166,7 +193,7 @@ export default function ConfiguracoesPage() {
     }
   }, [])
 
-  const addFinOption = async (type: 'BANK' | 'CATEGORY' | 'GROUP') => {
+  const addFinOption = async (type: FinOptionType) => {
     const name = (newFinName[type] || '').trim()
     if (!name) return
     setFinError('')
@@ -363,6 +390,31 @@ export default function ConfiguracoesPage() {
       await fetchConfigCategories()
     } catch {
       setConfigError('Erro de conexao')
+    }
+  }
+
+  const seedFinOptions = async () => {
+    if (!confirm('Popular as 6 listas com as opcoes padrao? Itens ja cadastrados nao sao duplicados.')) return
+    setFinSeeding(true)
+    setFinError('')
+    setFinSeedResult('')
+    try {
+      const res = await fetch('/api/seed/financial-options', { method: 'POST' })
+      if (!res.ok) {
+        const data = await res.json()
+        setFinError(data.error || 'Erro ao popular opcoes')
+        return
+      }
+      const data = await res.json()
+      setFinSeedResult(
+        `${data.created} opcoes criadas (${data.existing} ja existiam).`
+      )
+      await fetchFinOptions()
+      setTimeout(() => setFinSeedResult(''), 10000)
+    } catch {
+      setFinError('Erro de conexao')
+    } finally {
+      setFinSeeding(false)
     }
   }
 
@@ -956,17 +1008,34 @@ export default function ConfiguracoesPage() {
         </div>
       )}
 
-      {/* Financeiro Tab — 3 listas configuraveis */}
+      {/* Financeiro Tab — 6 listas configuraveis (bancos, pagamentos, receitas e custos) */}
       {activeTab === 'financeiro' && (
         <div className="space-y-6">
-          <div>
-            <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider">
-              Opcoes de Lancamento Financeiro
-            </h3>
-            <p className="text-xs text-gray-500 mt-1">
-              Cadastre os bancos, categorias e agrupadores que vao aparecer nos selects do Financeiro.
-            </p>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider">
+                Opcoes de Lancamento Financeiro
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Cadastre bancos, formas de pagamento, grupos de receita e de custo usados nos lancamentos.
+              </p>
+            </div>
+            <button
+              onClick={seedFinOptions}
+              disabled={finSeeding}
+              className="btn-secondary text-sm px-3 py-2 flex items-center gap-2 disabled:opacity-40"
+              title="Popular as 6 listas com valores padrao. Nao duplica itens ja cadastrados."
+            >
+              {finSeeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              Popular com padrao
+            </button>
           </div>
+
+          {finSeedResult && (
+            <div className="bg-green-900/40 border border-green-700 text-green-200 px-4 py-2 rounded-lg text-sm">
+              {finSeedResult}
+            </div>
+          )}
 
           {finError && (
             <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-2 rounded-lg text-sm">
@@ -975,12 +1044,8 @@ export default function ConfiguracoesPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {([
-              { type: 'BANK', label: 'Bancos', help: 'Ex: Itau PJ, Bradesco, Sicoob, Caixa dinheiro' },
-              { type: 'CATEGORY', label: 'Categorias', help: 'Ex: Material, Combustivel, Almoco, Energia' },
-              { type: 'GROUP', label: 'Agrupadores', help: 'Ex: Obra Joao, Obra Maria, Despesas fixas' },
-            ] as const).map((cfg) => {
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {FIN_TAB_SECTIONS.map((cfg) => {
               const items = finOptions.filter((o) => o.type === cfg.type)
               return (
                 <div key={cfg.type} className="card">
@@ -993,7 +1058,7 @@ export default function ConfiguracoesPage() {
                       value={newFinName[cfg.type] || ''}
                       onChange={(e) => setNewFinName({ ...newFinName, [cfg.type]: e.target.value })}
                       onKeyDown={(e) => { if (e.key === 'Enter') addFinOption(cfg.type) }}
-                      placeholder={`Novo ${cfg.label.toLowerCase().slice(0, -1)}`}
+                      placeholder={cfg.placeholder}
                       className="input-field flex-1 text-sm"
                       maxLength={80}
                     />

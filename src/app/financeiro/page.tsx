@@ -3,11 +3,14 @@
 import { useEffect, useState, useCallback } from 'react'
 import { formatCurrency } from '@/lib/calculations'
 
+type FinGroup = 'RECEITA_PRINCIPAL' | 'RECEITA_OUTRAS' | 'CUSTO_FIXO' | 'CUSTO_VARIAVEL'
+
 interface FinancialEntry {
   id: string
   code: string | null
   type: 'RECEITA' | 'DESPESA'
   category: string
+  group: FinGroup | null
   description: string
   amount: number
   dueDate: string
@@ -16,18 +19,44 @@ interface FinancialEntry {
   attachmentData: string | null
   attachmentName: string | null
   bankName: string | null
+  paymentMethod: string | null
   categoryName: string | null
   groupName: string | null
   budgetId: string | null
   projectId: string | null
 }
 
+type FinOptionType =
+  | 'BANK'
+  | 'CATEGORY'
+  | 'GROUP'
+  | 'PAYMENT_METHOD'
+  | 'INCOME_MAIN'
+  | 'INCOME_OTHER'
+  | 'COST_FIXED'
+  | 'COST_VARIABLE'
+
 interface FinancialOption {
   id: string
-  type: 'BANK' | 'CATEGORY' | 'GROUP'
+  type: FinOptionType
   name: string
   active: boolean
   order: number
+}
+
+// Grupo -> tipo de FinancialOption que traz as descricoes candidatas
+const GROUP_TO_OPTION_TYPE: Record<FinGroup, FinOptionType> = {
+  RECEITA_PRINCIPAL: 'INCOME_MAIN',
+  RECEITA_OUTRAS: 'INCOME_OTHER',
+  CUSTO_FIXO: 'COST_FIXED',
+  CUSTO_VARIAVEL: 'COST_VARIABLE',
+}
+
+const GROUP_LABELS: Record<FinGroup, string> = {
+  RECEITA_PRINCIPAL: 'Receitas Principais',
+  RECEITA_OUTRAS: 'Receitas Outras',
+  CUSTO_FIXO: 'Custos Fixos',
+  CUSTO_VARIAVEL: 'Custos Variaveis',
 }
 
 interface FixedCost {
@@ -47,7 +76,7 @@ interface TaxConfig {
   active: boolean
 }
 
-type Tab = 'receber' | 'pagar' | 'fixos' | 'impostos'
+type Tab = 'todos' | 'receber' | 'pagar' | 'fixos' | 'impostos'
 
 const STATUS_COLORS: Record<string, string> = {
   PENDENTE: 'bg-yellow-900/50 text-yellow-400',
@@ -70,7 +99,7 @@ const APPLIES_TO_OPTIONS = [
 ]
 
 export default function FinanceiroPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('receber')
+  const [activeTab, setActiveTab] = useState<Tab>('todos')
   const [entries, setEntries] = useState<FinancialEntry[]>([])
   const [fixedCosts, setFixedCosts] = useState<FixedCost[]>([])
   const [taxes, setTaxes] = useState<TaxConfig[]>([])
@@ -102,7 +131,9 @@ export default function FinanceiroPage() {
   const [showEntryModal, setShowEntryModal] = useState(false)
   const todayISO = () => new Date().toISOString().slice(0, 10)
   const [entryForm, setEntryForm] = useState({
-    type: 'DESPESA' as string,
+    id: '' as string, // quando editando
+    type: 'DESPESA' as 'RECEITA' | 'DESPESA',
+    group: '' as FinGroup | '',
     category: '',
     description: '',
     amount: 0,
@@ -113,6 +144,7 @@ export default function FinanceiroPage() {
     attachmentData: '' as string,
     attachmentName: '' as string,
     bankName: '' as string,
+    paymentMethod: '' as string,
     categoryName: '' as string,
     groupName: '' as string,
   })
@@ -214,20 +246,26 @@ export default function FinanceiroPage() {
     }
   }
 
-  // Create entry
-  const openNewEntry = (type: 'RECEITA' | 'DESPESA') => {
+  // Create entry — tipo ja define os 2 grupos disponiveis no select
+  const openNewEntry = (type: 'RECEITA' | 'DESPESA', prefGroup?: FinGroup) => {
+    const defaultGroup: FinGroup | '' =
+      prefGroup ||
+      (type === 'RECEITA' ? 'RECEITA_PRINCIPAL' : 'CUSTO_VARIAVEL')
     setEntryForm({
+      id: '',
       type,
+      group: defaultGroup,
       category: '',
       description: '',
       amount: 0,
-      dueDate: '',
+      dueDate: todayISO(),
       status: 'PENDENTE',
       paidNow: false,
       paidDate: '',
       attachmentData: '',
       attachmentName: '',
       bankName: '',
+      paymentMethod: '',
       categoryName: '',
       groupName: '',
     })
@@ -236,8 +274,20 @@ export default function FinanceiroPage() {
   }
 
   const banks = options.filter((o) => o.type === 'BANK' && o.active)
-  const categoryOpts = options.filter((o) => o.type === 'CATEGORY' && o.active)
-  const groupOpts = options.filter((o) => o.type === 'GROUP' && o.active)
+  const paymentMethods = options.filter((o) => o.type === 'PAYMENT_METHOD' && o.active)
+  const incomeMain = options.filter((o) => o.type === 'INCOME_MAIN' && o.active)
+  const incomeOther = options.filter((o) => o.type === 'INCOME_OTHER' && o.active)
+  const costFixed = options.filter((o) => o.type === 'COST_FIXED' && o.active)
+  const costVariable = options.filter((o) => o.type === 'COST_VARIABLE' && o.active)
+  const categoryOpts = options.filter((o) => o.type === 'CATEGORY' && o.active) // legado
+  const groupOpts = options.filter((o) => o.type === 'GROUP' && o.active) // legado
+
+  // Descricoes candidatas dado o grupo atual
+  const descriptionsForGroup = (g: FinGroup | ''): FinancialOption[] => {
+    if (!g) return []
+    const t = GROUP_TO_OPTION_TYPE[g]
+    return options.filter((o) => o.type === t && o.active)
+  }
 
   const handleAttachmentChange = (file: File | null) => {
     setAttachmentError('')
@@ -268,11 +318,24 @@ export default function FinanceiroPage() {
   }
 
   const saveEntry = async () => {
+    if (!entryForm.dueDate) {
+      setError('Informe a data de vencimento/lancamento.')
+      return
+    }
+    if (!entryForm.description.trim()) {
+      setError('Informe a descricao do lancamento.')
+      return
+    }
+    if (!entryForm.amount || entryForm.amount <= 0) {
+      setError('Informe um valor maior que zero.')
+      return
+    }
     setSavingEntry(true)
     setError('')
     try {
       const payload: any = {
         type: entryForm.type,
+        group: entryForm.group || null,
         category: entryForm.category,
         description: entryForm.description,
         amount: entryForm.amount,
@@ -282,17 +345,20 @@ export default function FinanceiroPage() {
         attachmentData: entryForm.attachmentData || null,
         attachmentName: entryForm.attachmentName || null,
         bankName: entryForm.bankName || null,
+        paymentMethod: entryForm.paymentMethod || null,
         categoryName: entryForm.categoryName || null,
         groupName: entryForm.groupName || null,
       }
+      const method = entryForm.id ? 'PUT' : 'POST'
+      if (entryForm.id) payload.id = entryForm.id
       const res = await fetch('/api/financial', {
-        method: 'POST',
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || 'Erro ao criar lancamento')
+        throw new Error(data.error || 'Erro ao salvar lancamento')
       }
       setShowEntryModal(false)
       await fetchAll()
@@ -432,11 +498,59 @@ export default function FinanceiroPage() {
 
   // Tab config
   const tabs: { key: Tab; label: string }[] = [
+    { key: 'todos', label: 'Todos os Lancamentos' },
     { key: 'receber', label: 'Contas a Receber' },
     { key: 'pagar', label: 'Contas a Pagar' },
     { key: 'fixos', label: 'Custos Fixos' },
     { key: 'impostos', label: 'Impostos' },
   ]
+
+  // Abrir modal pra editar lancamento existente
+  const openEditEntry = (entry: FinancialEntry) => {
+    setEntryForm({
+      id: entry.id,
+      type: entry.type,
+      group: (entry.group as FinGroup | null) || (entry.type === 'RECEITA' ? 'RECEITA_PRINCIPAL' : 'CUSTO_VARIAVEL'),
+      category: entry.category || '',
+      description: entry.description || '',
+      amount: entry.amount,
+      dueDate: entry.dueDate ? String(entry.dueDate).slice(0, 10) : '',
+      status: entry.status,
+      paidNow: entry.status === 'PAGO',
+      paidDate: entry.paidDate ? String(entry.paidDate).slice(0, 10) : '',
+      attachmentData: entry.attachmentData || '',
+      attachmentName: entry.attachmentName || '',
+      bankName: entry.bankName || '',
+      paymentMethod: entry.paymentMethod || '',
+      categoryName: entry.categoryName || '',
+      groupName: entry.groupName || '',
+    })
+    setAttachmentError('')
+    setShowEntryModal(true)
+  }
+
+  // Infere grupo automaticamente a partir de entries antigos que ainda nao tem
+  const entryGroup = (e: FinancialEntry): FinGroup => {
+    if (e.group) return e.group
+    return e.type === 'RECEITA' ? 'RECEITA_PRINCIPAL' : 'CUSTO_VARIAVEL'
+  }
+
+  // Todos entries agrupados (ja filtrados por mes/ano + status)
+  const allFiltered = entriesPeriodo.filter((e) => (statusFilter ? e.status === statusFilter : true))
+  const grouped: Record<FinGroup, FinancialEntry[]> = {
+    RECEITA_PRINCIPAL: [],
+    RECEITA_OUTRAS: [],
+    CUSTO_FIXO: [],
+    CUSTO_VARIAVEL: [],
+  }
+  for (const e of allFiltered) grouped[entryGroup(e)].push(e)
+  const groupTotal = (g: FinGroup) => grouped[g].reduce((s, e) => s + e.amount, 0)
+  const MES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+  const mesDe = (iso: string | null | undefined) => {
+    if (!iso) return '-'
+    const d = new Date(iso)
+    return isNaN(d.getTime()) ? '-' : MES_ABREV[d.getMonth()]
+  }
 
   if (loading) {
     return (
@@ -529,6 +643,133 @@ export default function FinanceiroPage() {
         </div>
       </div>
 
+      {/* Todos os Lancamentos — visao agrupada (receitas verdes, despesas vermelhas) */}
+      {activeTab === 'todos' && (
+        <div className="space-y-4">
+          <div className="card">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-100">Todos os Lancamentos</h2>
+                <p className="text-xs text-gray-500 mt-1">Agrupado por tipo. <span className="text-green-400">Verde</span> = entradas, <span className="text-red-400">vermelho</span> = saidas.</p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="select-field text-sm"
+                >
+                  <option value="">Todos status</option>
+                  <option value="PENDENTE">Pendente</option>
+                  <option value="PAGO">Pago</option>
+                  <option value="ATRASADO">Atrasado</option>
+                </select>
+                <button onClick={() => openNewEntry('RECEITA', 'RECEITA_PRINCIPAL')} className="btn-secondary text-sm px-3 py-2">
+                  + Receita
+                </button>
+                <button onClick={() => openNewEntry('DESPESA', 'CUSTO_VARIAVEL')} className="btn-primary text-sm px-3 py-2">
+                  + Despesa
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {(['RECEITA_PRINCIPAL', 'RECEITA_OUTRAS', 'CUSTO_FIXO', 'CUSTO_VARIAVEL'] as FinGroup[]).map((g) => {
+            const items = grouped[g]
+            const isReceita = g.startsWith('RECEITA')
+            const total = groupTotal(g)
+            if (items.length === 0) return null
+            return (
+              <div key={g} className="card">
+                <div className={`flex items-center justify-between mb-3 pb-2 border-b ${isReceita ? 'border-green-900/50' : 'border-red-900/50'}`}>
+                  <h3 className={`text-sm font-bold uppercase tracking-wider ${isReceita ? 'text-green-400' : 'text-red-400'}`}>
+                    {GROUP_LABELS[g]}
+                    <span className="ml-2 text-xs text-gray-500 normal-case font-normal">({items.length} {items.length === 1 ? 'lancamento' : 'lancamentos'})</span>
+                  </h3>
+                  <span className={`text-sm font-bold ${isReceita ? 'text-green-400' : 'text-red-400'}`}>
+                    {isReceita ? '+' : '-'} {formatCurrency(total)}
+                  </span>
+                </div>
+                <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                  <table className="w-full text-sm min-w-[900px]">
+                    <thead>
+                      <tr className="table-header">
+                        <th className="px-3 py-2 text-left">Data</th>
+                        <th className="px-3 py-2 text-left">Mes</th>
+                        <th className="px-3 py-2 text-left">ID</th>
+                        <th className="px-3 py-2 text-left">Descricao</th>
+                        <th className="px-3 py-2 text-right">Valor</th>
+                        <th className="px-3 py-2 text-left">Pagamento</th>
+                        <th className="px-3 py-2 text-left">Banco</th>
+                        <th className="px-3 py-2 text-left">Observacao</th>
+                        <th className="px-3 py-2 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((entry) => {
+                        const refDate = entry.paidDate || entry.dueDate
+                        return (
+                          <tr
+                            key={entry.id}
+                            onClick={() => openEditEntry(entry)}
+                            className={`table-row cursor-pointer ${isReceita ? 'hover:bg-green-950/30' : 'hover:bg-red-950/20'}`}
+                            title="Clique pra editar"
+                          >
+                            <td className="px-3 py-2 whitespace-nowrap text-gray-300">{new Date(refDate).toLocaleDateString('pt-BR')}</td>
+                            <td className="px-3 py-2 text-gray-400">{mesDe(refDate)}</td>
+                            <td className="px-3 py-2 font-mono text-xs text-gray-500">{entry.code || '-'}</td>
+                            <td className={`px-3 py-2 font-medium ${isReceita ? 'text-green-300' : 'text-red-300'}`}>{entry.description}</td>
+                            <td className={`px-3 py-2 text-right font-semibold ${isReceita ? 'text-green-400' : 'text-red-400'}`}>
+                              {isReceita ? '+' : '-'} {formatCurrency(entry.amount)}
+                            </td>
+                            <td className="px-3 py-2 text-gray-400">{entry.paymentMethod || '-'}</td>
+                            <td className="px-3 py-2 text-gray-400">{entry.bankName || '-'}</td>
+                            <td className="px-3 py-2 text-gray-500 text-xs">{entry.category || '-'}</td>
+                            <td className="px-3 py-2 text-center">
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[entry.status]}`}>
+                                {STATUS_LABELS[entry.status]}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          })}
+
+          {allFiltered.length === 0 && (
+            <div className="card text-center py-12 text-gray-500">
+              Nenhum lancamento no periodo selecionado.
+            </div>
+          )}
+
+          {allFiltered.length > 0 && (
+            <div className="card">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-gray-500">Receitas Principais</p>
+                  <p className="text-green-400 font-bold">{formatCurrency(groupTotal('RECEITA_PRINCIPAL'))}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Receitas Outras</p>
+                  <p className="text-green-400 font-bold">{formatCurrency(groupTotal('RECEITA_OUTRAS'))}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Custos Fixos</p>
+                  <p className="text-red-400 font-bold">{formatCurrency(groupTotal('CUSTO_FIXO'))}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Custos Variaveis</p>
+                  <p className="text-red-400 font-bold">{formatCurrency(groupTotal('CUSTO_VARIAVEL'))}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Contas a Receber */}
       {activeTab === 'receber' && (
         <div className="card">
@@ -581,8 +822,11 @@ export default function FinanceiroPage() {
                       </td>
                       <td className="px-4 py-3 font-medium">
                         <div>{entry.description}</div>
-                        {(entry.bankName || entry.groupName) && (
+                        {(entry.bankName || entry.paymentMethod || entry.groupName) && (
                           <div className="flex gap-1 mt-1 flex-wrap">
+                            {entry.paymentMethod && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300">{entry.paymentMethod}</span>
+                            )}
                             {entry.bankName && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{entry.bankName}</span>
                             )}
@@ -725,8 +969,11 @@ export default function FinanceiroPage() {
                       </td>
                       <td className="px-4 py-3 font-medium">
                         <div>{entry.description}</div>
-                        {(entry.bankName || entry.groupName) && (
+                        {(entry.bankName || entry.paymentMethod || entry.groupName) && (
                           <div className="flex gap-1 mt-1 flex-wrap">
+                            {entry.paymentMethod && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300">{entry.paymentMethod}</span>
+                            )}
                             {entry.bankName && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{entry.bankName}</span>
                             )}
@@ -1121,33 +1368,106 @@ export default function FinanceiroPage() {
 
       {/* New Entry Modal */}
       {showEntryModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="card w-full max-w-lg mx-4">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="card w-full max-w-2xl my-6">
             <h2 className="text-lg font-semibold text-gray-100 mb-4">
-              Novo Lancamento - {entryForm.type === 'RECEITA' ? 'Receita' : 'Despesa'}
+              {entryForm.id ? 'Editar' : 'Novo'} Lancamento - {entryForm.type === 'RECEITA' ? 'Receita' : 'Despesa'}
             </h2>
             <div className="space-y-4">
-              <div>
-                <label className="label-field">Descricao</label>
-                <input
-                  type="text"
-                  value={entryForm.description}
-                  onChange={(e) => setEntryForm({ ...entryForm, description: e.target.value })}
-                  className="input-field"
-                  placeholder="Descricao do lancamento"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+              {/* Linha 1: Tipo + Grupo */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="label-field">Categoria</label>
-                  <input
-                    type="text"
-                    value={entryForm.category}
-                    onChange={(e) => setEntryForm({ ...entryForm, category: e.target.value })}
-                    className="input-field"
-                    placeholder="Ex: Material, Servico"
-                  />
+                  <label className="label-field">Tipo</label>
+                  <select
+                    value={entryForm.type}
+                    onChange={(e) => {
+                      const newType = e.target.value as 'RECEITA' | 'DESPESA'
+                      const newGroup: FinGroup =
+                        newType === 'RECEITA' ? 'RECEITA_PRINCIPAL' : 'CUSTO_VARIAVEL'
+                      setEntryForm({ ...entryForm, type: newType, group: newGroup, description: '' })
+                    }}
+                    className="select-field w-full"
+                  >
+                    <option value="RECEITA">Receita (entrada)</option>
+                    <option value="DESPESA">Despesa (saida)</option>
+                  </select>
                 </div>
+                <div>
+                  <label className="label-field">Grupo</label>
+                  <select
+                    value={entryForm.group}
+                    onChange={(e) => setEntryForm({ ...entryForm, group: e.target.value as FinGroup, description: '' })}
+                    className="select-field w-full"
+                  >
+                    {entryForm.type === 'RECEITA' ? (
+                      <>
+                        <option value="RECEITA_PRINCIPAL">{GROUP_LABELS.RECEITA_PRINCIPAL}</option>
+                        <option value="RECEITA_OUTRAS">{GROUP_LABELS.RECEITA_OUTRAS}</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="CUSTO_FIXO">{GROUP_LABELS.CUSTO_FIXO}</option>
+                        <option value="CUSTO_VARIAVEL">{GROUP_LABELS.CUSTO_VARIAVEL}</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              {/* Linha 2: Descricao (select do grupo + campo livre) */}
+              <div>
+                <label className="label-field">
+                  Descricao <span className="text-xs text-gray-500">(escolha da lista ou digite)</span>
+                </label>
+                {(() => {
+                  const opts = descriptionsForGroup(entryForm.group || null as any)
+                  if (opts.length === 0) {
+                    return (
+                      <input
+                        type="text"
+                        value={entryForm.description}
+                        onChange={(e) => setEntryForm({ ...entryForm, description: e.target.value })}
+                        className="input-field"
+                        placeholder="Descricao do lancamento"
+                      />
+                    )
+                  }
+                  return (
+                    <div className="space-y-2">
+                      <select
+                        value={opts.find((o) => o.name === entryForm.description) ? entryForm.description : '__custom__'}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          if (v === '__custom__') {
+                            setEntryForm({ ...entryForm, description: '' })
+                          } else {
+                            setEntryForm({ ...entryForm, description: v })
+                          }
+                        }}
+                        className="select-field w-full"
+                      >
+                        {opts.map((o) => (
+                          <option key={o.id} value={o.name}>{o.name}</option>
+                        ))}
+                        <option value="__custom__">Outro (digitar livre)</option>
+                      </select>
+                      {!opts.find((o) => o.name === entryForm.description) && (
+                        <input
+                          type="text"
+                          value={entryForm.description}
+                          onChange={(e) => setEntryForm({ ...entryForm, description: e.target.value })}
+                          className="input-field"
+                          placeholder="Digite a descricao"
+                          autoFocus
+                        />
+                      )}
+                    </div>
+                  )
+                })()}
+              </div>
+
+              {/* Linha 3: Valor + Data */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label-field">Valor (R$)</label>
                   <input
@@ -1156,23 +1476,24 @@ export default function FinanceiroPage() {
                     value={entryForm.amount || ''}
                     onChange={(e) => setEntryForm({ ...entryForm, amount: parseFloat(e.target.value) || 0 })}
                     className="input-field"
+                    placeholder="0,00"
+                  />
+                </div>
+                <div>
+                  <label className="label-field">Data de Vencimento</label>
+                  <input
+                    type="date"
+                    value={entryForm.dueDate}
+                    onChange={(e) => setEntryForm({ ...entryForm, dueDate: e.target.value })}
+                    className="input-field"
                   />
                 </div>
               </div>
-              <div>
-                <label className="label-field">Data de Vencimento</label>
-                <input
-                  type="date"
-                  value={entryForm.dueDate}
-                  onChange={(e) => setEntryForm({ ...entryForm, dueDate: e.target.value })}
-                  className="input-field"
-                />
-              </div>
 
-              {/* 3 selects configuraveis — gerenciados em Configuracoes > Financeiro */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Linha 4: Banco + Forma de pagamento (em ambos os tipos) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="label-field">Banco (onde foi pago)</label>
+                  <label className="label-field">Banco</label>
                   <select
                     value={entryForm.bankName}
                     onChange={(e) => setEntryForm({ ...entryForm, bankName: e.target.value })}
@@ -1186,39 +1507,38 @@ export default function FinanceiroPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="label-field">Categoria</label>
+                  <label className="label-field">Forma de Pagamento</label>
                   <select
-                    value={entryForm.categoryName}
-                    onChange={(e) => setEntryForm({ ...entryForm, categoryName: e.target.value })}
+                    value={entryForm.paymentMethod}
+                    onChange={(e) => setEntryForm({ ...entryForm, paymentMethod: e.target.value })}
                     className="select-field w-full"
-                    disabled={categoryOpts.length === 0}
+                    disabled={paymentMethods.length === 0}
                   >
-                    <option value="">{categoryOpts.length === 0 ? 'Nenhuma categoria cadastrada' : 'Selecione...'}</option>
-                    {categoryOpts.map((c) => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="label-field">Agrupador</label>
-                  <select
-                    value={entryForm.groupName}
-                    onChange={(e) => setEntryForm({ ...entryForm, groupName: e.target.value })}
-                    className="select-field w-full"
-                    disabled={groupOpts.length === 0}
-                  >
-                    <option value="">{groupOpts.length === 0 ? 'Nenhum agrupador cadastrado' : 'Selecione...'}</option>
-                    {groupOpts.map((g) => (
-                      <option key={g.id} value={g.name}>{g.name}</option>
+                    <option value="">{paymentMethods.length === 0 ? 'Nenhuma cadastrada' : 'Selecione...'}</option>
+                    {paymentMethods.map((p) => (
+                      <option key={p.id} value={p.name}>{p.name}</option>
                     ))}
                   </select>
                 </div>
               </div>
-              {(banks.length === 0 || categoryOpts.length === 0 || groupOpts.length === 0) && (
+              {(banks.length === 0 || paymentMethods.length === 0 || descriptionsForGroup(entryForm.group || null as any).length === 0) && (
                 <p className="text-xs text-gray-500">
-                  Dica: cadastre bancos, categorias e agrupadores em <a href="/configuracoes" className="text-amarelo hover:underline">Configuracoes &gt; Financeiro</a>.
+                  Dica: cadastre opcoes em <a href="/configuracoes" className="text-amarelo hover:underline">Configuracoes &gt; Financeiro</a>.
+                  Use o botao <em>&quot;Popular com padrao&quot;</em> pra pre-carregar tudo.
                 </p>
               )}
+
+              {/* Observacao */}
+              <div>
+                <label className="label-field">Observacao (opcional)</label>
+                <input
+                  type="text"
+                  value={entryForm.category}
+                  onChange={(e) => setEntryForm({ ...entryForm, category: e.target.value })}
+                  className="input-field"
+                  placeholder="Ex: Fabricacao, Ferro Velho, Mesas..."
+                />
+              </div>
 
               {/* Anexo do boleto (PDF ou imagem) */}
               <div>

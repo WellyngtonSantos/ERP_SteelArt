@@ -251,7 +251,9 @@ export async function POST(request: NextRequest) {
             return {
               type: 'RECEITA',
               category: 'PARCELA',
-              description: `Parcela ${idx + 1} (${p.method}) - ${clientName}`,
+              group: 'RECEITA_PRINCIPAL',
+              paymentMethod: p.method || null,
+              description: `Parcela ${idx + 1} - ${clientName}`,
               amount: total,
               dueDate,
               status: 'PENDENTE',
@@ -268,6 +270,7 @@ export async function POST(request: NextRequest) {
             {
               type: 'RECEITA',
               category: 'PARCELA',
+              group: 'RECEITA_PRINCIPAL',
               description: `Entrada - ${clientName}`,
               amount: entryAmount,
               dueDate: now,
@@ -278,6 +281,7 @@ export async function POST(request: NextRequest) {
             {
               type: 'RECEITA',
               category: 'PARCELA',
+              group: 'RECEITA_PRINCIPAL',
               description: `Entrega - ${clientName}`,
               amount: deliveryAmount,
               dueDate: deliveryDate,
@@ -527,7 +531,9 @@ export async function PUT(request: NextRequest) {
             return {
               type: 'RECEITA',
               category: 'PARCELA',
-              description: `Parcela ${idx + 1} (${p.method}) - ${clientName}`,
+              group: 'RECEITA_PRINCIPAL',
+              paymentMethod: p.method || null,
+              description: `Parcela ${idx + 1} - ${clientName}`,
               amount: total,
               dueDate,
               status: 'PENDENTE',
@@ -544,6 +550,7 @@ export async function PUT(request: NextRequest) {
             {
               type: 'RECEITA',
               category: 'PARCELA',
+              group: 'RECEITA_PRINCIPAL',
               description: `Entrada - ${clientName}`,
               amount: entryAmount,
               dueDate: now,
@@ -554,6 +561,7 @@ export async function PUT(request: NextRequest) {
             {
               type: 'RECEITA',
               category: 'PARCELA',
+              group: 'RECEITA_PRINCIPAL',
               description: `Entrega - ${clientName}`,
               amount: deliveryAmount,
               dueDate: deliveryDate,

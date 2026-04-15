@@ -11,6 +11,9 @@ import {
   Save,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  Check,
   Search,
   Package,
   Pencil,
@@ -220,35 +223,61 @@ function AccordionSection({
   activeSection,
   onToggle,
   children,
+  forceOpen = false,
 }: {
   id: string
   title: string
   activeSection: string
   onToggle: (id: string) => void
   children: React.ReactNode
+  forceOpen?: boolean
 }) {
-  const isOpen = activeSection === id
+  const isOpen = forceOpen || activeSection === id
   return (
     <div className="border border-grafite-700 rounded-lg overflow-hidden">
-      <button
-        type="button"
-        onPointerUp={(e) => {
-          e.stopPropagation()
-          onToggle(isOpen ? '' : id)
-        }}
-        className="w-full flex items-center justify-between px-4 py-4 bg-grafite-800 hover:bg-grafite-700 transition-colors text-left min-h-[48px]"
-      >
-        <span className="text-sm font-semibold text-gray-200">{title}</span>
-        {isOpen ? (
-          <ChevronUp className="w-5 h-5 text-gray-400" />
-        ) : (
-          <ChevronDown className="w-5 h-5 text-gray-400" />
-        )}
-      </button>
+      {!forceOpen && (
+        <button
+          type="button"
+          onPointerUp={(e) => {
+            e.stopPropagation()
+            onToggle(isOpen ? '' : id)
+          }}
+          className="w-full flex items-center justify-between px-4 py-4 bg-grafite-800 hover:bg-grafite-700 transition-colors text-left min-h-[48px]"
+        >
+          <span className="text-sm font-semibold text-gray-200">{title}</span>
+          {isOpen ? (
+            <ChevronUp className="w-5 h-5 text-gray-400" />
+          ) : (
+            <ChevronDown className="w-5 h-5 text-gray-400" />
+          )}
+        </button>
+      )}
+      {forceOpen && (
+        <div className="px-4 py-3 bg-grafite-800 border-b border-grafite-700">
+          <span className="text-sm font-semibold text-amarelo">{title}</span>
+        </div>
+      )}
       {isOpen && <div className="p-4 bg-grafite-900/50 space-y-4">{children}</div>}
     </div>
   )
 }
+
+// Wizard do orcamento — passos em linha do tempo
+type WizardStep = 1 | 2 | 3 | 4 | 5 | 6
+interface StepDef {
+  n: WizardStep
+  label: string
+  subtitle: string
+  sectionIds: string[]
+}
+const WIZARD_STEPS: StepDef[] = [
+  { n: 1, label: 'Cliente', subtitle: 'Para quem e o orcamento', sectionIds: ['client'] },
+  { n: 2, label: 'Escopo', subtitle: 'Produto e tipo', sectionIds: ['product', 'type'] },
+  { n: 3, label: 'Configurador', subtitle: 'Monte o seu', sectionIds: ['configurator'] },
+  { n: 4, label: 'Custos', subtitle: 'Materiais, mao de obra, margens', sectionIds: ['costs', 'modo', 'employees', 'items', 'margins'] },
+  { n: 5, label: 'Pagamento', subtitle: 'Parcelas e formas de pagamento', sectionIds: ['payment'] },
+  { n: 6, label: 'Apresentacao', subtitle: 'Fotos e observacoes', sectionIds: ['images', 'notes'] },
+]
 
 const emptyForm = (): BudgetForm => ({
   productMode: 'custom',
@@ -305,6 +334,22 @@ function BudgetFormPanel({
   saving: boolean
 }) {
   const [activeSection, setActiveSection] = useState<string>('product')
+  const [currentStep, setCurrentStep] = useState<WizardStep>(1)
+
+  // Mapa section id -> numero do passo (pra filtrar render)
+  const sectionStepMap = (() => {
+    const m: Record<string, WizardStep> = {}
+    for (const s of WIZARD_STEPS) for (const id of s.sectionIds) m[id] = s.n
+    return m
+  })()
+  const isInStep = (sectionId: string) => sectionStepMap[sectionId] === currentStep
+  const currentStepDef = WIZARD_STEPS.find((s) => s.n === currentStep)!
+  const goToStep = (n: WizardStep) => {
+    setCurrentStep(n)
+    setActiveSection(WIZARD_STEPS.find((s) => s.n === n)?.sectionIds[0] || '')
+  }
+  const nextStep = () => { if (currentStep < 6) goToStep((currentStep + 1) as WizardStep) }
+  const prevStep = () => { if (currentStep > 1) goToStep((currentStep - 1) as WizardStep) }
   const [cnpjLoading, setCnpjLoading] = useState(false)
   const [cnpjError, setCnpjError] = useState('')
   const [cnpjSuccess, setCnpjSuccess] = useState('')
@@ -568,8 +613,49 @@ function BudgetFormPanel({
         <div className="flex-1 overflow-hidden flex">
           {/* Form Left */}
           <div className="flex-1 p-6 space-y-4 overflow-y-auto overscroll-contain">
+            {/* Stepper — linha do tempo horizontal */}
+            <div className="sticky top-0 z-20 -mx-6 px-6 pt-1 pb-3 bg-grafite-900 border-b border-grafite-700 mb-4">
+              <div className="flex items-center justify-between gap-1 overflow-x-auto">
+                {WIZARD_STEPS.map((s, idx) => {
+                  const done = currentStep > s.n
+                  const current = currentStep === s.n
+                  return (
+                    <div key={s.n} className="flex items-center flex-1 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => goToStep(s.n)}
+                        className="flex flex-col items-center gap-1 group min-w-0"
+                        title={s.subtitle}
+                      >
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                            current
+                              ? 'bg-amarelo text-grafite-950'
+                              : done
+                                ? 'bg-green-600 text-white'
+                                : 'bg-grafite-700 text-gray-400 group-hover:bg-grafite-600'
+                          }`}
+                        >
+                          {done ? <Check className="w-4 h-4" /> : s.n}
+                        </div>
+                        <span className={`text-[10px] uppercase tracking-wider whitespace-nowrap ${current ? 'text-amarelo font-bold' : 'text-gray-400'}`}>
+                          {s.label}
+                        </span>
+                      </button>
+                      {idx < WIZARD_STEPS.length - 1 && (
+                        <div className={`flex-1 h-px mx-1 min-w-[8px] ${currentStep > s.n ? 'bg-green-600' : 'bg-grafite-700'}`} />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                Passo {currentStep} de 6 — <span className="text-gray-300">{currentStepDef.subtitle}</span>
+              </p>
+            </div>
+
             {/* Product Selection */}
-            <AccordionSection id="product" title="O que sera orcado? (Produto)" activeSection={activeSection} onToggle={setActiveSection}>
+            {isInStep('product') && <AccordionSection id="product" title="O que sera orcado? (Produto)" activeSection={activeSection} onToggle={setActiveSection}>
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <button
                   type="button"
@@ -672,10 +758,10 @@ function BudgetFormPanel({
                   )}
                 </div>
               )}
-            </AccordionSection>
+            </AccordionSection>}
 
             {/* Client Info */}
-            <AccordionSection id="client" title="Para quem e o orcamento? (Cliente)" activeSection={activeSection} onToggle={setActiveSection}>
+            {isInStep('client') && <AccordionSection id="client" title="Para quem e o orcamento? (Cliente)" activeSection={activeSection} onToggle={setActiveSection}>
               {/* Client Mode Selector */}
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <button
@@ -867,10 +953,10 @@ function BudgetFormPanel({
                   />
                 </div>
               </div>
-            </AccordionSection>
+            </AccordionSection>}
 
             {/* Type Selector */}
-            <AccordionSection id="type" title="Qual o tipo? (Fabricacao, Servico ou Venda)" activeSection={activeSection} onToggle={setActiveSection}>
+            {isInStep('type') && <AccordionSection id="type" title="Qual o tipo? (Fabricacao, Servico ou Venda)" activeSection={activeSection} onToggle={setActiveSection}>
               <div className="grid grid-cols-3 gap-3">
                 {([
                   { key: 'PRODUTO' as const, label: 'Fabricacao', desc: 'Fabricar pecas, estruturas ou chales' },
@@ -897,10 +983,10 @@ function BudgetFormPanel({
                   Na venda de produtos, os itens serao descontados do estoque ao aprovar o orcamento.
                 </p>
               )}
-            </AccordionSection>
+            </AccordionSection>}
 
             {/* Costs - hidden for VENDA type */}
-            {form.type !== 'VENDA' && <AccordionSection id="costs" title="Custos de Material (Ferro, Pintura, etc)" activeSection={activeSection} onToggle={setActiveSection}>
+            {isInStep('costs') && form.type !== 'VENDA' && <AccordionSection id="costs" title="Custos de Material (Ferro, Pintura, etc)" activeSection={activeSection} onToggle={setActiveSection}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="label-field">Custo de Ferro (R$)</label>
@@ -934,7 +1020,7 @@ function BudgetFormPanel({
             </AccordionSection>}
 
             {/* Modo de Calculo — Operacional vs Manual */}
-            {form.type !== 'VENDA' && (
+            {form.type !== 'VENDA' && isInStep('modo') && (
               <AccordionSection id="modo" title="Como calcular o orcamento?" activeSection={activeSection} onToggle={setActiveSection}>
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   <button
@@ -1017,7 +1103,7 @@ function BudgetFormPanel({
             )}
 
             {/* Margins */}
-            <AccordionSection id="margins" title="Lucro, Impostos e Margem de Seguranca" activeSection={activeSection} onToggle={setActiveSection}>
+            {isInStep('margins') && <AccordionSection id="margins" title="Lucro, Impostos e Margem de Seguranca" activeSection={activeSection} onToggle={setActiveSection}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="label-field">
@@ -1089,10 +1175,10 @@ function BudgetFormPanel({
                   />
                 </div>
               </div>
-            </AccordionSection>
+            </AccordionSection>}
 
             {/* Employee Allocation - hidden for VENDA type */}
-            {form.type !== 'VENDA' && <AccordionSection id="employees" title="Quem vai trabalhar? (Mao de Obra)" activeSection={activeSection} onToggle={setActiveSection}>
+            {isInStep('employees') && form.type !== 'VENDA' && <AccordionSection id="employees" title="Quem vai trabalhar? (Mao de Obra)" activeSection={activeSection} onToggle={setActiveSection}>
               {form.employees.length === 0 ? (
                 <p className="text-sm text-gray-500">Carregando funcionarios...</p>
               ) : (
@@ -1153,7 +1239,7 @@ function BudgetFormPanel({
 
             {/* Budget Items */}
             {/* Monte o seu — configurador de opcoes cadastradas em Configuracoes */}
-            {form.type !== 'VENDA' && configCategories.filter((c) => c.active).length > 0 && (
+            {form.type !== 'VENDA' && isInStep('configurator') && configCategories.filter((c) => c.active).length > 0 && (
               <AccordionSection id="configurator" title="Monte o seu (cobertura, revestimento, piso, opcionais...)" activeSection={activeSection} onToggle={setActiveSection}>
                 <p className="text-xs text-gray-500 mb-4">
                   Selecione as opcoes. O preco e o tempo (dias) serao somados automaticamente ao orcamento.
@@ -1294,7 +1380,7 @@ function BudgetFormPanel({
               </AccordionSection>
             )}
 
-            <AccordionSection id="items" title={form.type === 'VENDA' ? 'Produtos para Venda (serao descontados do estoque)' : 'Lista de Itens e Materiais'} activeSection={activeSection} onToggle={setActiveSection}>
+            {isInStep('items') && <AccordionSection id="items" title={form.type === 'VENDA' ? 'Produtos para Venda (serao descontados do estoque)' : 'Lista de Itens e Materiais'} activeSection={activeSection} onToggle={setActiveSection}>
               <div className="space-y-3">
                 {form.items.map((item, index) => (
                   <div
@@ -1359,10 +1445,10 @@ function BudgetFormPanel({
                   <Plus className="w-4 h-4" /> Adicionar Item
                 </button>
               </div>
-            </AccordionSection>
+            </AccordionSection>}
 
             {/* Payment Config — parcelas mistas (dinheiro + cartao, boleto, etc) */}
-            <AccordionSection id="payment" title="Como o cliente vai pagar? (Parcelas)" activeSection={activeSection} onToggle={setActiveSection}>
+            {isInStep('payment') && <AccordionSection id="payment" title="Como o cliente vai pagar? (Parcelas)" activeSection={activeSection} onToggle={setActiveSection}>
               <p className="text-xs text-gray-500 mb-3">
                 Cada parcela pode ter forma e imposto proprios. Ex: entrada em dinheiro (sem imposto) + restante no cartao (com 5%).
               </p>
@@ -1513,22 +1599,45 @@ function BudgetFormPanel({
                   )
                 })()}
               </div>
-            </AccordionSection>
+            </AccordionSection>}
 
             {/* Images */}
-            <AccordionSection id="images" title="Fotos e Imagens de Referencia" activeSection={activeSection} onToggle={setActiveSection}>
+            {isInStep('images') && <AccordionSection id="images" title="Fotos e Imagens de Referencia" activeSection={activeSection} onToggle={setActiveSection}>
               <BudgetImageUpload form={form} setForm={setForm} />
-            </AccordionSection>
+            </AccordionSection>}
 
             {/* Notes */}
-            <AccordionSection id="notes" title="Observacoes e Anotacoes" activeSection={activeSection} onToggle={setActiveSection}>
+            {isInStep('notes') && <AccordionSection id="notes" title="Observacoes e Anotacoes" activeSection={activeSection} onToggle={setActiveSection}>
               <textarea
                 className="input-field min-h-[100px] resize-y"
                 value={form.notes}
                 onChange={(e) => updateField('notes', e.target.value)}
                 placeholder="Observacoes adicionais sobre o orcamento..."
               />
-            </AccordionSection>
+            </AccordionSection>}
+
+            {/* Navegacao Anterior/Proximo — rodape do wizard */}
+            <div className="sticky bottom-0 -mx-6 px-6 pt-3 pb-1 bg-grafite-900 border-t border-grafite-700 mt-6 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={prevStep}
+                disabled={currentStep === 1}
+                className="btn-secondary text-sm flex items-center gap-2 disabled:opacity-40"
+              >
+                <ChevronLeft className="w-4 h-4" /> Anterior
+              </button>
+              <span className="text-xs text-gray-500">
+                {currentStep} de 6
+              </span>
+              <button
+                type="button"
+                onClick={nextStep}
+                disabled={currentStep === 6}
+                className="btn-primary text-sm flex items-center gap-2 disabled:opacity-40"
+              >
+                Proximo <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Calculation Summary Panel (Right) */}
