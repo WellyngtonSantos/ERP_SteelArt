@@ -18,7 +18,9 @@ import { AIProvider, AssistantReply, AssistantRequest } from './provider'
 import { INTENT_HANDLERS, isIntentId } from './intents/registry'
 import { IntentId, IntentResponse } from './types'
 
-const MODEL = 'claude-opus-4-6'
+// Sonnet 4.6 equilibra custo e qualidade pra assistente de gestao com tool use.
+// Se quiser mais raciocinio (analises complexas) troca pra 'claude-opus-4-6'.
+const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
 const MAX_TOKENS = 2048
 const TIMEOUT_MS = 60_000
 
