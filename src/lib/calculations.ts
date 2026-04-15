@@ -22,28 +22,50 @@ export function calcValorHora(custoMensal: number): number {
   return custoMensal / (BUSINESS_DAYS_PER_MONTH * WORK_HOURS_PER_DAY)
 }
 
+// Modelo da planilha Precificacao.xlsx (usado pela SteelArt ha anos):
+// preco_final = custo_total * (1 + (lucro% + imposto% + causalidade%) / 100)
+// preco_com_desconto = preco_final - (preco_final * desconto% / 100)
+// imposto_R$ = preco_final * imposto% / 100
+// lucro_liquido = preco_final - custo_total
 export function calcOrcamento(params: {
   custoMateriais: number
   custoMaoDeObra: number
   custoPintura: number
-  margemLucro: number      // percentual
-  margemCausalidade: number // percentual
-  aliquotaImposto: number  // percentual
+  corteDobra?: number
+  instalacao?: number
+  margemLucro: number
+  margemCausalidade: number
+  aliquotaImposto: number
+  descontoPercent?: number
 }): {
   custoBase: number
   custoComCausalidade: number
   imposto: number
   lucro: number
   precoFinal: number
+  precoComDesconto: number
+  lucroLiquido: number
 } {
-  const { custoMateriais, custoMaoDeObra, custoPintura, margemLucro, margemCausalidade, aliquotaImposto } = params
+  const {
+    custoMateriais,
+    custoMaoDeObra,
+    custoPintura,
+    corteDobra = 0,
+    instalacao = 0,
+    margemLucro,
+    margemCausalidade,
+    aliquotaImposto,
+    descontoPercent = 0,
+  } = params
 
-  const custoBase = custoMateriais + custoMaoDeObra + custoPintura
+  const custoBase = custoMateriais + custoMaoDeObra + custoPintura + corteDobra + instalacao
+  const somaPct = margemLucro + margemCausalidade + aliquotaImposto
+  const precoFinal = custoBase * (1 + somaPct / 100)
+  const imposto = precoFinal * (aliquotaImposto / 100)
+  const lucro = precoFinal * (margemLucro / 100)
   const custoComCausalidade = custoBase * (1 + margemCausalidade / 100)
-  const lucro = custoComCausalidade * (margemLucro / 100)
-  const subtotal = custoComCausalidade + lucro
-  const imposto = subtotal * (aliquotaImposto / 100)
-  const precoFinal = subtotal + imposto
+  const precoComDesconto = precoFinal - (precoFinal * descontoPercent) / 100
+  const lucroLiquido = precoFinal - custoBase
 
   return {
     custoBase,
@@ -51,11 +73,12 @@ export function calcOrcamento(params: {
     imposto,
     lucro,
     precoFinal,
+    precoComDesconto,
+    lucroLiquido,
   }
 }
 
-// Modo operacional: custo base = custoOperacionalDia * diasExecucao + custoMateriais.
-// Substitui ferro + pintura + mao-de-obra manual por um unico calculo derivado da empresa.
+// Modo operacional: mao-de-obra = custoOperacionalDia * diasExecucao (substitui corte/dobra/instalacao/pintura).
 export function calcOrcamentoOperacional(params: {
   custoOperacionalDia: number
   diasExecucao: number
@@ -63,6 +86,7 @@ export function calcOrcamentoOperacional(params: {
   margemLucro: number
   margemCausalidade: number
   aliquotaImposto: number
+  descontoPercent?: number
 }): {
   custoOperacional: number
   custoBase: number
@@ -70,6 +94,8 @@ export function calcOrcamentoOperacional(params: {
   imposto: number
   lucro: number
   precoFinal: number
+  precoComDesconto: number
+  lucroLiquido: number
 } {
   const {
     custoOperacionalDia,
@@ -78,15 +104,18 @@ export function calcOrcamentoOperacional(params: {
     margemLucro,
     margemCausalidade,
     aliquotaImposto,
+    descontoPercent = 0,
   } = params
 
   const custoOperacional = custoOperacionalDia * diasExecucao
   const custoBase = custoOperacional + custoMateriais
+  const somaPct = margemLucro + margemCausalidade + aliquotaImposto
+  const precoFinal = custoBase * (1 + somaPct / 100)
+  const imposto = precoFinal * (aliquotaImposto / 100)
+  const lucro = precoFinal * (margemLucro / 100)
   const custoComCausalidade = custoBase * (1 + margemCausalidade / 100)
-  const lucro = custoComCausalidade * (margemLucro / 100)
-  const subtotal = custoComCausalidade + lucro
-  const imposto = subtotal * (aliquotaImposto / 100)
-  const precoFinal = subtotal + imposto
+  const precoComDesconto = precoFinal - (precoFinal * descontoPercent) / 100
+  const lucroLiquido = precoFinal - custoBase
 
   return {
     custoOperacional,
@@ -95,6 +124,8 @@ export function calcOrcamentoOperacional(params: {
     imposto,
     lucro,
     precoFinal,
+    precoComDesconto,
+    lucroLiquido,
   }
 }
 

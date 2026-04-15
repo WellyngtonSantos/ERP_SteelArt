@@ -63,6 +63,8 @@ interface Product {
   defaultMargin: number
   tempoProducaoDias: number
   tempoMontagemDias: number
+  isFullProduct?: boolean
+  basePrice?: number
   images?: string
   createdAt: string
   configuratorDefaults?: ProductConfigDefault[]
@@ -78,6 +80,8 @@ interface ProductForm {
   defaultMargin: number
   tempoProducaoDias: number
   tempoMontagemDias: number
+  isFullProduct: boolean
+  basePrice: number
   existingImages: string[]
   newImages: File[]
   configDefaults: { optionId: string; quantity: number }[]
@@ -92,6 +96,8 @@ const emptyForm = (): ProductForm => ({
   defaultMargin: 20,
   tempoProducaoDias: 0,
   tempoMontagemDias: 0,
+  isFullProduct: false,
+  basePrice: 0,
   existingImages: [],
   newImages: [],
   configDefaults: [],
@@ -152,6 +158,8 @@ export default function ProdutosPage() {
       defaultMargin: product.defaultMargin,
       tempoProducaoDias: product.tempoProducaoDias || 0,
       tempoMontagemDias: product.tempoMontagemDias || 0,
+      isFullProduct: !!product.isFullProduct,
+      basePrice: product.basePrice || 0,
       existingImages,
       newImages: [],
       configDefaults: (product.configuratorDefaults || []).map((d) => ({
@@ -177,6 +185,8 @@ export default function ProdutosPage() {
     formData.append('defaultMargin', String(form.defaultMargin))
     formData.append('tempoProducaoDias', String(form.tempoProducaoDias))
     formData.append('tempoMontagemDias', String(form.tempoMontagemDias))
+    formData.append('isFullProduct', String(form.isFullProduct))
+    formData.append('basePrice', String(form.basePrice))
     formData.append('existingImages', form.existingImages.join('|||'))
     formData.append('configuratorDefaults', JSON.stringify(form.configDefaults))
 
@@ -639,6 +649,39 @@ export default function ProdutosPage() {
                     Total: {form.tempoProducaoDias + form.tempoMontagemDias} dias
                   </p>
                 )}
+              </div>
+
+              {/* Tipo de produto + preco base (venda direta) */}
+              <div className="bg-grafite-800 border border-grafite-700 rounded-lg p-4 space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.isFullProduct}
+                    onChange={(e) => setForm((prev) => ({ ...prev, isFullProduct: e.target.checked }))}
+                    className="mt-1 h-4 w-4 accent-amarelo"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-gray-200">Produto completo (ativa &quot;Monte o seu&quot; no orcamento)</p>
+                    <p className="text-xs text-gray-500">
+                      Marque para chales e produtos que tem opcionais configuraveis. Desmarque para estruturas metalicas simples.
+                    </p>
+                  </div>
+                </label>
+                <div>
+                  <label className="label-field">Preco base sugerido para VENDA (R$)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="input-field"
+                    value={form.basePrice || ''}
+                    onChange={(e) => setForm((prev) => ({ ...prev, basePrice: parseFloat(e.target.value) || 0 }))}
+                    placeholder="Deixe 0 se o produto nao e vendido pronto"
+                  />
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Usado quando o orcamento e do tipo &quot;Venda de Produtos&quot; (sem mao de obra).
+                  </p>
+                </div>
               </div>
 
               {/* Materials */}

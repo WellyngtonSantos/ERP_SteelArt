@@ -6,6 +6,37 @@ import { enforceRateLimit, totalImagesSize, ValidationError, apiErrorResponse } 
 
 const MAX_TOTAL_IMAGES_BYTES = 25 * 1024 * 1024 // 25MB agregado por orcamento
 
+// Gera FinancialEntry DESPESA PENDENTE pra cada socio (PARTNER) a partir do lucro do orcamento.
+// Caixa empresa (COMPANY_CASH) nao gera despesa — fica retido na empresa.
+async function createProLaboreEntries(params: {
+  budgetId: string
+  projectId: string
+  clientName: string
+  lucroLiquido: number
+  due: Date
+}) {
+  const { budgetId, projectId, clientName, lucroLiquido, due } = params
+  if (lucroLiquido <= 0) return
+  const partners = await prisma.partner.findMany({
+    where: { active: true, kind: 'PARTNER' },
+    orderBy: { order: 'asc' },
+  })
+  if (partners.length === 0) return
+
+  const data = partners.map((p) => ({
+    type: 'DESPESA',
+    category: 'PRO_LABORE',
+    group: 'CUSTO_VARIAVEL',
+    description: `Pro-Labore ${p.name} - ${clientName}`,
+    amount: (lucroLiquido * (p.sharePercent || 0)) / 100,
+    dueDate: due,
+    status: 'PENDENTE',
+    budgetId,
+    projectId,
+  }))
+  await prisma.financialEntry.createMany({ data })
+}
+
 async function parseRequestBody(request: NextRequest) {
   const contentType = request.headers.get('content-type') || ''
 
@@ -100,8 +131,11 @@ export async function POST(request: NextRequest) {
       status,
       ironCost,
       paintCost,
+      corteDobraCost,
+      instalacaoCost,
       profitMargin,
       casualtyMargin,
+      discountPercent,
       entryPercent,
       deliveryPercent,
       taxRate,
@@ -114,6 +148,7 @@ export async function POST(request: NextRequest) {
       custoOperacionalDia,
       payments,
       picks,
+      clientPersonType,
     } = body
 
     // Calculate material costs from items
@@ -161,20 +196,25 @@ export async function POST(request: NextRequest) {
           margemLucro: profitMargin || 20,
           margemCausalidade: casualtyMargin || 5,
           aliquotaImposto: taxRate || 0,
+          descontoPercent: discountPercent || 0,
         })
       : calcOrcamento({
           custoMateriais: custoMateriaisTotal,
           custoMaoDeObra,
           custoPintura: paintCost || 0,
+          corteDobra: corteDobraCost || 0,
+          instalacao: instalacaoCost || 0,
           margemLucro: profitMargin || 20,
           margemCausalidade: casualtyMargin || 5,
           aliquotaImposto: taxRate || 0,
+          descontoPercent: discountPercent || 0,
         })
 
     const budget = await prisma.budget.create({
       data: {
         clientId: clientId || null,
         clientName,
+        clientPersonType: clientPersonType === 'PESSOA_FISICA' ? 'PESSOA_FISICA' : 'PESSOA_JURIDICA',
         clientCnpj: clientCnpj || null,
         clientPhone: clientPhone || null,
         clientEmail: clientEmail || null,
@@ -184,12 +224,15 @@ export async function POST(request: NextRequest) {
         status: status || 'RASCUNHO',
         ironCost: ironCost || 0,
         paintCost: paintCost || 0,
+        corteDobraCost: corteDobraCost || 0,
+        instalacaoCost: instalacaoCost || 0,
         profitMargin: profitMargin || 20,
         casualtyMargin: casualtyMargin || 5,
+        discountPercent: discountPercent || 0,
         entryPercent: entryPercent || 50,
         deliveryPercent: deliveryPercent || 50,
         totalCost: calc.custoBase,
-        totalPrice: calc.precoFinal,
+        totalPrice: calc.precoComDesconto,
         taxRate: taxRate || 0,
         modoCalculo: isOperacional ? 'OPERACIONAL' : 'MANUAL',
         diasExecucao: diasExecucao || 0,
@@ -203,8 +246,10 @@ export async function POST(request: NextRequest) {
               description: string
               quantity: number
               unitPrice: number
+              kind?: string
             }) => ({
               materialId: item.materialId || null,
+              kind: item.kind === 'FRETE' || item.kind === 'OPCIONAL_PRODUTO' ? item.kind : 'MATERIAL',
               description: item.description,
               quantity: item.quantity,
               unitPrice: item.unitPrice,
@@ -304,6 +349,17 @@ export async function POST(request: NextRequest) {
           }
         }
       }
+
+      // Pro-Labore para socios — fim do mes corrente como vencimento
+      const lucroLiquido = (calc.precoFinal || 0) - (calc.custoBase || 0)
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      await createProLaboreEntries({
+        budgetId: budget.id,
+        projectId: project.id,
+        clientName,
+        lucroLiquido,
+        due: endOfMonth,
+      })
     }
 
     return NextResponse.json(budget, { status: 201 })
@@ -335,8 +391,11 @@ export async function PUT(request: NextRequest) {
       status,
       ironCost,
       paintCost,
+      corteDobraCost,
+      instalacaoCost,
       profitMargin,
       casualtyMargin,
+      discountPercent,
       entryPercent,
       deliveryPercent,
       taxRate,
@@ -349,6 +408,7 @@ export async function PUT(request: NextRequest) {
       custoOperacionalDia,
       payments,
       picks,
+      clientPersonType,
     } = body
 
     if (!id) {
@@ -408,14 +468,18 @@ export async function PUT(request: NextRequest) {
           margemLucro: profitMargin || 20,
           margemCausalidade: casualtyMargin || 5,
           aliquotaImposto: taxRate || 0,
+          descontoPercent: discountPercent || 0,
         })
       : calcOrcamento({
           custoMateriais: custoMateriaisTotal,
           custoMaoDeObra,
           custoPintura: paintCost || 0,
+          corteDobra: corteDobraCost || 0,
+          instalacao: instalacaoCost || 0,
           margemLucro: profitMargin || 20,
           margemCausalidade: casualtyMargin || 5,
           aliquotaImposto: taxRate || 0,
+          descontoPercent: discountPercent || 0,
         })
 
     // Delete old items, employees, payments, picks, then recreate
@@ -429,6 +493,7 @@ export async function PUT(request: NextRequest) {
       data: {
         clientId: clientId || null,
         clientName,
+        clientPersonType: clientPersonType === 'PESSOA_FISICA' ? 'PESSOA_FISICA' : 'PESSOA_JURIDICA',
         clientCnpj: clientCnpj || null,
         clientPhone: clientPhone || null,
         clientEmail: clientEmail || null,
@@ -438,12 +503,15 @@ export async function PUT(request: NextRequest) {
         status: status || existing.status,
         ironCost: ironCost || 0,
         paintCost: paintCost || 0,
+        corteDobraCost: corteDobraCost || 0,
+        instalacaoCost: instalacaoCost || 0,
         profitMargin: profitMargin || 20,
         casualtyMargin: casualtyMargin || 5,
+        discountPercent: discountPercent || 0,
         entryPercent: entryPercent || 50,
         deliveryPercent: deliveryPercent || 50,
         totalCost: calc.custoBase,
-        totalPrice: calc.precoFinal,
+        totalPrice: calc.precoComDesconto,
         taxRate: taxRate || 0,
         modoCalculo: isOperacional ? 'OPERACIONAL' : 'MANUAL',
         diasExecucao: diasExecucao || 0,
@@ -457,8 +525,10 @@ export async function PUT(request: NextRequest) {
               description: string
               quantity: number
               unitPrice: number
+              kind?: string
             }) => ({
               materialId: item.materialId || null,
+              kind: item.kind === 'FRETE' || item.kind === 'OPCIONAL_PRODUTO' ? item.kind : 'MATERIAL',
               description: item.description,
               quantity: item.quantity,
               unitPrice: item.unitPrice,
@@ -584,6 +654,17 @@ export async function PUT(request: NextRequest) {
           }
         }
       }
+
+      // Pro-Labore para socios — fim do mes corrente como vencimento
+      const lucroLiquido = (calc.precoFinal || 0) - (calc.custoBase || 0)
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      await createProLaboreEntries({
+        budgetId: budget.id,
+        projectId: project.id,
+        clientName,
+        lucroLiquido,
+        due: endOfMonth,
+      })
     }
 
     return NextResponse.json(budget)

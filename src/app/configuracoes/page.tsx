@@ -27,6 +27,7 @@ import {
   Plus,
   Edit2,
   LayoutGrid,
+  Users,
 } from 'lucide-react'
 import { useTheme } from '@/components/ThemeProvider'
 
@@ -144,7 +145,7 @@ export default function ConfiguracoesPage() {
   const [saved, setSaved] = useState(false)
   const [newLogo, setNewLogo] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'identity' | 'colors' | 'texts' | 'preview' | 'changelog' | 'financeiro' | 'configurador'>('identity')
+  const [activeTab, setActiveTab] = useState<'identity' | 'colors' | 'texts' | 'preview' | 'changelog' | 'financeiro' | 'configurador' | 'socios'>('identity')
   const [changelog, setChangelog] = useState<ChangelogData | null>(null)
   const [changelogLoading, setChangelogLoading] = useState(false)
   const [changelogError, setChangelogError] = useState('')
@@ -572,6 +573,7 @@ export default function ConfiguracoesPage() {
     { id: 'preview' as const, label: 'Preview', icon: Eye },
     { id: 'financeiro' as const, label: 'Financeiro', icon: Banknote },
     { id: 'configurador' as const, label: 'Configurador', icon: LayoutGrid },
+    { id: 'socios' as const, label: 'Socios', icon: Users },
     { id: 'changelog' as const, label: 'Atualizacoes', icon: History },
   ]
 
@@ -1437,6 +1439,9 @@ export default function ConfiguracoesPage() {
         </div>
       )}
 
+      {/* Socios Tab */}
+      {activeTab === 'socios' && <PartnersPanel />}
+
       {/* Changelog Tab */}
       {activeTab === 'changelog' && (
         <div className="card space-y-6">
@@ -1577,6 +1582,200 @@ export default function ConfiguracoesPage() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+interface PartnerRow {
+  id: string
+  name: string
+  kind: 'PARTNER' | 'COMPANY_CASH'
+  sharePercent: number
+  order: number
+  active: boolean
+}
+
+function PartnersPanel() {
+  const [partners, setPartners] = useState<PartnerRow[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [newName, setNewName] = useState('')
+  const [newKind, setNewKind] = useState<'PARTNER' | 'COMPANY_CASH'>('PARTNER')
+  const [newShare, setNewShare] = useState(0)
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/partners')
+      if (res.ok) setPartners(await res.json())
+      else setError('Erro ao carregar socios')
+    } catch {
+      setError('Erro de conexao')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchAll() }, [fetchAll])
+
+  const totalShare = partners.filter((p) => p.active).reduce((s, p) => s + (p.sharePercent || 0), 0)
+  const totalOk = Math.abs(totalShare - 100) < 0.1
+
+  const addPartner = async () => {
+    const name = newName.trim()
+    if (!name) return
+    setError('')
+    try {
+      const res = await fetch('/api/partners', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, kind: newKind, sharePercent: newShare, order: partners.length + 1 }),
+      })
+      if (!res.ok) {
+        setError((await res.json())?.error || 'Erro ao criar')
+        return
+      }
+      setNewName('')
+      setNewShare(0)
+      await fetchAll()
+    } catch {
+      setError('Erro de conexao')
+    }
+  }
+
+  const updatePartner = async (id: string, payload: Partial<PartnerRow>) => {
+    setError('')
+    try {
+      const res = await fetch('/api/partners', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...payload }),
+      })
+      if (!res.ok) setError((await res.json())?.error || 'Erro ao atualizar')
+      await fetchAll()
+    } catch {
+      setError('Erro de conexao')
+    }
+  }
+
+  const deletePartner = async (id: string) => {
+    if (!confirm('Excluir este socio? Orcamentos ja aprovados mantem os lancamentos de pro-labore que foram gerados.')) return
+    try {
+      const res = await fetch(`/api/partners?id=${id}`, { method: 'DELETE' })
+      if (!res.ok) setError((await res.json())?.error || 'Erro ao excluir')
+      await fetchAll()
+    } catch {
+      setError('Erro de conexao')
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider">Socios e Distribuicao de Lucro</h3>
+        <p className="text-xs text-gray-500 mt-1">
+          Define quem divide o lucro liquido de cada orcamento aprovado. Socios do tipo <em>PARTNER</em> geram Pro-Labore automatico em Contas a Pagar.
+          O <em>Caixa Empresa</em> nao gera despesa — fica retido.
+        </p>
+      </div>
+
+      {error && (
+        <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-2 rounded-lg text-sm">
+          {error}
+          <button onClick={() => setError('')} className="ml-3 text-red-400 hover:text-red-300">x</button>
+        </div>
+      )}
+
+      <div className="card">
+        <div className="flex flex-col md:flex-row gap-2 md:items-end mb-3">
+          <div className="flex-1">
+            <label className="label-field">Nome</label>
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="input-field text-sm"
+              placeholder="Ex: Helio"
+            />
+          </div>
+          <div className="w-40">
+            <label className="label-field">Tipo</label>
+            <select
+              value={newKind}
+              onChange={(e) => setNewKind(e.target.value as 'PARTNER' | 'COMPANY_CASH')}
+              className="select-field w-full text-sm"
+            >
+              <option value="PARTNER">Socio (Pro-Labore)</option>
+              <option value="COMPANY_CASH">Caixa Empresa</option>
+            </select>
+          </div>
+          <div className="w-28">
+            <label className="label-field">%</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={newShare || ''}
+              onChange={(e) => setNewShare(parseFloat(e.target.value) || 0)}
+              className="input-field text-sm"
+            />
+          </div>
+          <button onClick={addPartner} disabled={!newName.trim()} className="btn-primary text-sm px-3 py-2 disabled:opacity-40">
+            Adicionar
+          </button>
+        </div>
+
+        {loading ? (
+          <p className="text-sm text-gray-500 text-center py-6">Carregando...</p>
+        ) : partners.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-6">Nenhum socio cadastrado. O padrao (Helio/Jonathan/Caixa) sera criado automaticamente na primeira consulta.</p>
+        ) : (
+          <div className="space-y-2">
+            {partners.map((p) => (
+              <div key={p.id} className={`flex items-center gap-2 p-2 rounded border border-grafite-700 ${!p.active ? 'opacity-50' : ''}`}>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full ${p.kind === 'COMPANY_CASH' ? 'bg-blue-900/50 text-blue-300' : 'bg-green-900/50 text-green-300'}`}>
+                  {p.kind === 'COMPANY_CASH' ? 'Caixa' : 'Socio'}
+                </span>
+                <input
+                  type="text"
+                  value={p.name}
+                  onChange={(e) => setPartners((prev) => prev.map((x) => x.id === p.id ? { ...x, name: e.target.value } : x))}
+                  onBlur={() => updatePartner(p.id, { name: p.name })}
+                  className="input-field flex-1 text-sm py-1"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={p.sharePercent || ''}
+                  onChange={(e) => setPartners((prev) => prev.map((x) => x.id === p.id ? { ...x, sharePercent: parseFloat(e.target.value) || 0 } : x))}
+                  onBlur={() => updatePartner(p.id, { sharePercent: p.sharePercent })}
+                  className="input-field w-20 text-sm py-1 text-right"
+                />
+                <span className="text-xs text-gray-500">%</span>
+                <button
+                  onClick={() => updatePartner(p.id, { active: !p.active })}
+                  className={`text-xs px-2 py-0.5 rounded-full ${p.active ? 'bg-green-900/50 text-green-400' : 'bg-gray-700 text-gray-400'}`}
+                >
+                  {p.active ? 'Ativo' : 'Inativo'}
+                </button>
+                <button onClick={() => deletePartner(p.id)} className="text-red-500 hover:text-red-400 p-1">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {partners.length > 0 && (
+          <div className={`mt-3 text-sm font-medium ${totalOk ? 'text-green-400' : 'text-yellow-400'}`}>
+            Total: {totalShare.toFixed(1)}% {totalOk ? '✓' : '— ajuste para somar 100%'}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

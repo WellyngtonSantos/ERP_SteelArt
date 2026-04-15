@@ -81,6 +81,8 @@ export async function POST(request: NextRequest) {
     const defaultMargin = parseFloat(formData.get('defaultMargin') as string) || 20
     const tempoProducaoDias = parseFloat(formData.get('tempoProducaoDias') as string) || 0
     const tempoMontagemDias = parseFloat(formData.get('tempoMontagemDias') as string) || 0
+    const isFullProduct = formData.get('isFullProduct') === 'true'
+    const basePrice = parseFloat(formData.get('basePrice') as string) || 0
 
     if (!name) {
       return NextResponse.json({ error: 'Nome obrigatorio' }, { status: 400 })
@@ -124,6 +126,8 @@ export async function POST(request: NextRequest) {
         defaultMargin,
         tempoProducaoDias,
         tempoMontagemDias,
+        isFullProduct,
+        basePrice,
         images: joinedImages,
         configuratorDefaults: defaults.length > 0 ? {
           create: defaults.map((d) => ({
@@ -166,6 +170,8 @@ export async function PUT(request: NextRequest) {
     const defaultMargin = parseFloat(formData.get('defaultMargin') as string) || 20
     const tempoProducaoDias = parseFloat(formData.get('tempoProducaoDias') as string) || 0
     const tempoMontagemDias = parseFloat(formData.get('tempoMontagemDias') as string) || 0
+    const isFullProduct = formData.get('isFullProduct') === 'true'
+    const basePrice = parseFloat(formData.get('basePrice') as string) || 0
     const existingImages = formData.get('existingImages') as string | null
 
     if (!id || !name) {
@@ -221,6 +227,8 @@ export async function PUT(request: NextRequest) {
           defaultMargin,
           tempoProducaoDias,
           tempoMontagemDias,
+          isFullProduct,
+          basePrice,
           images: joinedImages,
         },
       })

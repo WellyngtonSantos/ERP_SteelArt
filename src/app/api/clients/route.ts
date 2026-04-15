@@ -21,6 +21,10 @@ export async function GET() {
   }
 }
 
+function validatePersonType(t: unknown): 'PESSOA_FISICA' | 'PESSOA_JURIDICA' {
+  return t === 'PESSOA_FISICA' ? 'PESSOA_FISICA' : 'PESSOA_JURIDICA'
+}
+
 export async function POST(request: NextRequest) {
   const { error } = await requireAllowedPage('/clientes')
   if (error) return error
@@ -28,26 +32,26 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { name, cnpj, phone, email, address, notes } = body
+    const personType = validatePersonType(body.personType)
+    const expectedLen = personType === 'PESSOA_FISICA' ? 11 : 14
 
     if (!name?.trim()) {
       return NextResponse.json({ error: 'Nome e obrigatorio' }, { status: 400 })
     }
 
-    // Check CNPJ uniqueness if provided
-    if (cnpj) {
-      const cnpjClean = cnpj.replace(/\D/g, '')
-      if (cnpjClean.length === 14) {
-        const existing = await prisma.client.findUnique({ where: { cnpj: cnpjClean } })
-        if (existing) {
-          return NextResponse.json({ error: 'CNPJ ja cadastrado' }, { status: 409 })
-        }
+    const docClean = cnpj ? String(cnpj).replace(/\D/g, '') : ''
+    if (docClean && docClean.length === expectedLen) {
+      const existing = await prisma.client.findUnique({ where: { cnpj: docClean } })
+      if (existing) {
+        return NextResponse.json({ error: `${personType === 'PESSOA_FISICA' ? 'CPF' : 'CNPJ'} ja cadastrado` }, { status: 409 })
       }
     }
 
     const client = await prisma.client.create({
       data: {
         name: name.trim(),
-        cnpj: cnpj ? cnpj.replace(/\D/g, '') : null,
+        personType,
+        cnpj: docClean && docClean.length === expectedLen ? docClean : null,
         phone: phone || null,
         email: email || null,
         address: address || null,
@@ -69,19 +73,18 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
     const { id, name, cnpj, phone, email, address, notes, active } = body
+    const personType = validatePersonType(body.personType)
+    const expectedLen = personType === 'PESSOA_FISICA' ? 11 : 14
 
     if (!id) {
       return NextResponse.json({ error: 'ID e obrigatorio' }, { status: 400 })
     }
 
-    // Check CNPJ uniqueness if changed
-    if (cnpj) {
-      const cnpjClean = cnpj.replace(/\D/g, '')
-      if (cnpjClean.length === 14) {
-        const existing = await prisma.client.findUnique({ where: { cnpj: cnpjClean } })
-        if (existing && existing.id !== id) {
-          return NextResponse.json({ error: 'CNPJ ja cadastrado por outro cliente' }, { status: 409 })
-        }
+    const docClean = cnpj ? String(cnpj).replace(/\D/g, '') : ''
+    if (docClean && docClean.length === expectedLen) {
+      const existing = await prisma.client.findUnique({ where: { cnpj: docClean } })
+      if (existing && existing.id !== id) {
+        return NextResponse.json({ error: `${personType === 'PESSOA_FISICA' ? 'CPF' : 'CNPJ'} ja cadastrado por outro cliente` }, { status: 409 })
       }
     }
 
@@ -89,7 +92,8 @@ export async function PUT(request: NextRequest) {
       where: { id },
       data: {
         name: name?.trim(),
-        cnpj: cnpj ? cnpj.replace(/\D/g, '') : null,
+        personType,
+        cnpj: docClean && docClean.length === expectedLen ? docClean : null,
         phone: phone || null,
         email: email || null,
         address: address || null,

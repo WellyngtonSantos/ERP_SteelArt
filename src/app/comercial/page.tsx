@@ -40,8 +40,11 @@ interface Employee {
   monthlyCost: number
 }
 
+type BudgetItemKind = 'MATERIAL' | 'FRETE' | 'OPCIONAL_PRODUTO'
+
 interface BudgetItemForm {
   materialId?: string
+  kind?: BudgetItemKind
   description: string
   quantity: number
   unitPrice: number
@@ -117,6 +120,8 @@ interface ProductData {
   materialsJson: string
   ironCost: number
   paintCost: number
+  isFullProduct?: boolean
+  basePrice?: number
   defaultMargin: number
   tempoProducaoDias: number
   tempoMontagemDias: number
@@ -133,12 +138,15 @@ interface ClientData {
   address: string | null
 }
 
+type ClientPersonType = 'PESSOA_FISICA' | 'PESSOA_JURIDICA'
+
 interface BudgetForm {
   id?: string
   productId?: string
   productMode: 'custom' | 'catalog'
   clientMode: 'registered' | 'quick'
   clientId?: string
+  clientPersonType: ClientPersonType
   clientCnpj: string
   clientName: string
   clientPhone: string
@@ -148,8 +156,11 @@ interface BudgetForm {
   status: string
   ironCost: number
   paintCost: number
+  corteDobraCost: number
+  instalacaoCost: number
   profitMargin: number
   casualtyMargin: number
+  discountPercent: number
   entryPercent: number
   deliveryPercent: number
   taxRate: number
@@ -276,8 +287,8 @@ function AccordionSection({
   )
 }
 
-// Wizard do orcamento — passos em linha do tempo
-type WizardStep = 1 | 2 | 3 | 4 | 5 | 6
+// Wizard do orcamento — 4 passos consolidados
+type WizardStep = 1 | 2 | 3 | 4
 interface StepDef {
   n: WizardStep
   label: string
@@ -285,17 +296,16 @@ interface StepDef {
   sectionIds: string[]
 }
 const WIZARD_STEPS: StepDef[] = [
-  { n: 1, label: 'Cliente', subtitle: 'Para quem e o orcamento', sectionIds: ['client'] },
-  { n: 2, label: 'Escopo', subtitle: 'Produto e tipo', sectionIds: ['product', 'type'] },
-  { n: 3, label: 'Configurador', subtitle: 'Monte o seu', sectionIds: ['configurator'] },
-  { n: 4, label: 'Custos', subtitle: 'Materiais, mao de obra, margens', sectionIds: ['costs', 'modo', 'employees', 'items', 'margins'] },
-  { n: 5, label: 'Pagamento', subtitle: 'Parcelas e formas de pagamento', sectionIds: ['payment'] },
-  { n: 6, label: 'Apresentacao', subtitle: 'Fotos e observacoes', sectionIds: ['images', 'notes'] },
+  { n: 1, label: 'Cliente', subtitle: 'Cliente, tipo (PF/PJ) e modalidade do orcamento', sectionIds: ['client', 'type'] },
+  { n: 2, label: 'Escopo', subtitle: 'Produto, configurador, itens e itens adicionais', sectionIds: ['product', 'configurator', 'items'] },
+  { n: 3, label: 'Precificador', subtitle: 'Mao de obra, materiais, fretes, margens e desconto', sectionIds: ['costs', 'modo', 'employees', 'margins'] },
+  { n: 4, label: 'Fechamento', subtitle: 'Pagamento, imagens e observacoes', sectionIds: ['payment', 'images', 'notes'] },
 ]
 
 const emptyForm = (): BudgetForm => ({
   productMode: 'custom',
   clientMode: 'registered',
+  clientPersonType: 'PESSOA_JURIDICA',
   clientCnpj: '',
   clientName: '',
   clientPhone: '',
@@ -305,13 +315,16 @@ const emptyForm = (): BudgetForm => ({
   status: 'RASCUNHO',
   ironCost: 0,
   paintCost: 0,
+  corteDobraCost: 0,
+  instalacaoCost: 0,
   profitMargin: 20,
   casualtyMargin: 5,
+  discountPercent: 0,
   entryPercent: 50,
   deliveryPercent: 50,
   taxRate: 0,
   notes: '',
-  items: [{ description: '', quantity: 1, unitPrice: 0 }],
+  items: [{ kind: 'MATERIAL', description: '', quantity: 1, unitPrice: 0 }],
   employees: [],
   existingImages: [],
   newImages: [],
@@ -324,6 +337,14 @@ const emptyForm = (): BudgetForm => ({
 
 // --------------- Budget Form Component ---------------
 
+interface PartnerData {
+  id: string
+  name: string
+  kind: 'PARTNER' | 'COMPANY_CASH'
+  sharePercent: number
+  active: boolean
+}
+
 function BudgetFormPanel({
   form,
   setForm,
@@ -332,6 +353,7 @@ function BudgetFormPanel({
   products,
   clients,
   configCategories,
+  partners,
   onSave,
   onClose,
   saving,
@@ -343,6 +365,7 @@ function BudgetFormPanel({
   products: ProductData[]
   clients: ClientData[]
   configCategories: ConfiguratorCategoryData[]
+  partners: PartnerData[]
   onSave: (status: string) => void
   onClose: () => void
   saving: boolean
@@ -362,7 +385,7 @@ function BudgetFormPanel({
     setCurrentStep(n)
     setActiveSection(WIZARD_STEPS.find((s) => s.n === n)?.sectionIds[0] || '')
   }
-  const nextStep = () => { if (currentStep < 6) goToStep((currentStep + 1) as WizardStep) }
+  const nextStep = () => { if (currentStep < 4) goToStep((currentStep + 1) as WizardStep) }
   const prevStep = () => { if (currentStep > 1) goToStep((currentStep - 1) as WizardStep) }
   const [cnpjLoading, setCnpjLoading] = useState(false)
   const [cnpjError, setCnpjError] = useState('')
@@ -521,6 +544,7 @@ function BudgetFormPanel({
         margemLucro: form.profitMargin,
         margemCausalidade: form.casualtyMargin,
         aliquotaImposto: form.taxRate,
+        descontoPercent: form.discountPercent,
       })
       return {
         ...calc,
@@ -546,9 +570,12 @@ function BudgetFormPanel({
       custoMateriais,
       custoMaoDeObra,
       custoPintura: form.paintCost,
+      corteDobra: form.corteDobraCost,
+      instalacao: form.instalacaoCost,
       margemLucro: form.profitMargin,
       margemCausalidade: form.casualtyMargin,
       aliquotaImposto: form.taxRate,
+      descontoPercent: form.discountPercent,
     })
 
     return {
@@ -677,7 +704,7 @@ function BudgetFormPanel({
                 })}
               </div>
               <p className="text-xs text-gray-500 mt-2 text-center">
-                Passo {currentStep} de 6 — <span className="text-gray-300">{currentStepDef.subtitle}</span>
+                Passo {currentStep} de 4 — <span className="text-gray-300">{currentStepDef.subtitle}</span>
               </p>
             </div>
 
@@ -789,6 +816,27 @@ function BudgetFormPanel({
 
             {/* Client Info */}
             {isInStep('client') && <AccordionSection id="client" title="Para quem e o orcamento? (Cliente)" activeSection={activeSection} onToggle={setActiveSection}>
+              {/* Tipo de cliente PF/PJ */}
+              <div className="mb-4">
+                <label className="label-field">Tipo de Cliente</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['PESSOA_JURIDICA', 'PESSOA_FISICA'] as ClientPersonType[]).map((pt) => (
+                    <button
+                      key={pt}
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, clientPersonType: pt }))}
+                      className={`p-2 rounded-lg border-2 text-sm font-medium transition-colors ${
+                        form.clientPersonType === pt
+                          ? 'border-amarelo bg-amarelo/10 text-amarelo'
+                          : 'border-grafite-700 bg-grafite-800 text-gray-400 hover:border-grafite-500'
+                      }`}
+                    >
+                      {pt === 'PESSOA_JURIDICA' ? 'Pessoa Juridica (CNPJ)' : 'Pessoa Fisica (CPF)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Client Mode Selector */}
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <button
@@ -1129,9 +1177,44 @@ function BudgetFormPanel({
               </AccordionSection>
             )}
 
+            {/* Mao de obra manual — corte e dobra + instalacao (so para Fabricacao/Servico) */}
+            {isInStep('margins') && form.type !== 'VENDA' && (
+              <AccordionSection id="manual-labor" title="Mao de Obra (Corte/Dobra + Instalacao Steel Art)" activeSection={activeSection} onToggle={setActiveSection} forceOpen>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="label-field">Corte e Dobra Metal (R$)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="input-field"
+                      value={form.corteDobraCost || ''}
+                      onChange={(e) => updateField('corteDobraCost', parseFloat(e.target.value) || 0)}
+                      placeholder="0,00"
+                    />
+                  </div>
+                  <div>
+                    <label className="label-field">Instalacao Steel Art (R$)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="input-field"
+                      value={form.instalacaoCost || ''}
+                      onChange={(e) => updateField('instalacaoCost', parseFloat(e.target.value) || 0)}
+                      placeholder="0,00"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Esses valores entram no custo total junto com ferro, pintura, fretes e insumos. Os dias de montagem multiplicam o custo/dia no modo Operacional.
+                </p>
+              </AccordionSection>
+            )}
+
             {/* Margins */}
-            {isInStep('margins') && <AccordionSection id="margins" title="Lucro, Impostos e Margem de Seguranca" activeSection={activeSection} onToggle={setActiveSection}>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {isInStep('margins') && <AccordionSection id="margins" title="Lucro, Impostos, Seguranca e Desconto" activeSection={activeSection} onToggle={setActiveSection}>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="label-field">
                     Margem de Lucro: {formatPercent(form.profitMargin)}
@@ -1201,6 +1284,29 @@ function BudgetFormPanel({
                     step="0.5"
                   />
                 </div>
+                <div>
+                  <label className="label-field">
+                    Desconto: {formatPercent(form.discountPercent)}
+                  </label>
+                  <input
+                    type="range"
+                    className="w-full accent-amarelo"
+                    min="0"
+                    max="50"
+                    step="0.5"
+                    value={form.discountPercent}
+                    onChange={(e) => updateField('discountPercent', parseFloat(e.target.value))}
+                  />
+                  <input
+                    type="number"
+                    className="input-field mt-2"
+                    value={form.discountPercent}
+                    onChange={(e) => updateField('discountPercent', parseFloat(e.target.value) || 0)}
+                    min="0"
+                    max="50"
+                    step="0.5"
+                  />
+                </div>
               </div>
             </AccordionSection>}
 
@@ -1266,8 +1372,9 @@ function BudgetFormPanel({
 
             {/* Budget Items */}
             {/* Monte o seu — configurador de opcoes cadastradas em Configuracoes */}
-            {form.type !== 'VENDA' && isInStep('configurator') && configCategories.filter((c) => c.active).length > 0 && (
-              <AccordionSection id="configurator" title="Monte o seu (cobertura, revestimento, piso, opcionais...)" activeSection={activeSection} onToggle={setActiveSection}>
+            {/* Configurador: so aparece para Fabricacao (PRODUTO) com produto do catalogo marcado como completo (chale) */}
+            {form.type === 'PRODUTO' && form.productMode === 'catalog' && products.find((p) => p.id === form.productId)?.isFullProduct && isInStep('configurator') && configCategories.filter((c) => c.active).length > 0 && (
+              <AccordionSection id="configurator" title="Monte o seu — personalize as opcoes do chale" activeSection={activeSection} onToggle={setActiveSection}>
                 <p className="text-xs text-gray-500 mb-4">
                   Selecione as opcoes. O preco e o tempo (dias) serao somados automaticamente ao orcamento.
                 </p>
@@ -1654,12 +1761,12 @@ function BudgetFormPanel({
                 <ChevronLeft className="w-4 h-4" /> Anterior
               </button>
               <span className="text-xs text-gray-500">
-                {currentStep} de 6
+                {currentStep} de 4
               </span>
               <button
                 type="button"
                 onClick={nextStep}
-                disabled={currentStep === 6}
+                disabled={currentStep === 4}
                 className="btn-primary text-sm flex items-center gap-2 disabled:opacity-40"
               >
                 Proximo <ChevronRight className="w-4 h-4" />
@@ -1692,8 +1799,42 @@ function BudgetFormPanel({
                 value={calculation.imposto}
               />
               <div className="border-t border-amarelo/30 pt-3">
-                <SummaryRow label="VALOR FINAL P/ CLIENTE" value={calculation.precoFinal} highlight big />
+                <SummaryRow label="PRECO FINAL" value={calculation.precoFinal} highlight big />
               </div>
+              {form.discountPercent > 0 && (
+                <div>
+                  <SummaryRow
+                    label={`Desconto (${formatPercent(form.discountPercent)})`}
+                    value={-(calculation.precoFinal - (calculation.precoComDesconto ?? calculation.precoFinal))}
+                  />
+                  <SummaryRow
+                    label="VALOR FINAL P/ CLIENTE"
+                    value={calculation.precoComDesconto ?? calculation.precoFinal}
+                    highlight
+                    big
+                  />
+                </div>
+              )}
+              <div className="border-t border-grafite-600 pt-3 mt-3">
+                <SummaryRow label="Lucro Liquido" value={calculation.lucroLiquido ?? (calculation.precoFinal - calculation.custoBase)} highlight />
+              </div>
+              {/* Distribuicao Caixa + Pro-Labore */}
+              {partners.filter((p) => p.active).length > 0 && (calculation.lucroLiquido ?? 0) > 0 && (
+                <div className="space-y-1 bg-grafite-900/40 rounded-lg p-2 text-xs">
+                  <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Distribuicao</p>
+                  {partners.filter((p) => p.active).map((p) => {
+                    const share = ((calculation.lucroLiquido ?? 0) * (p.sharePercent || 0)) / 100
+                    return (
+                      <div key={p.id} className="flex justify-between">
+                        <span className={p.kind === 'COMPANY_CASH' ? 'text-blue-300' : 'text-green-300'}>
+                          {p.kind === 'COMPANY_CASH' ? '🏢' : '👤'} {p.name} ({p.sharePercent.toFixed(1)}%)
+                        </span>
+                        <span className="text-gray-200 font-medium">{formatCurrency(share)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -1856,6 +1997,7 @@ export default function ComercialPage() {
   const [materials, setMaterials] = useState<Material[]>([])
   const [products, setProducts] = useState<ProductData[]>([])
   const [clients, setClients] = useState<ClientData[]>([])
+  const [partners, setPartners] = useState<PartnerData[]>([])
   const [configCategories, setConfigCategories] = useState<ConfiguratorCategoryData[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -1867,13 +2009,14 @@ export default function ComercialPage() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [budgetsRes, employeesRes, materialsRes, productsRes, clientsRes, configRes] = await Promise.all([
+      const [budgetsRes, employeesRes, materialsRes, productsRes, clientsRes, configRes, partnersRes] = await Promise.all([
         fetch('/api/budgets'),
         fetch('/api/employees'),
         fetch('/api/materials'),
         fetch('/api/products'),
         fetch('/api/clients'),
         fetch('/api/configurator/categories'),
+        fetch('/api/partners'),
       ])
       if (budgetsRes.ok) setBudgets(await budgetsRes.json())
       if (employeesRes.ok) setEmployees(await employeesRes.json())
@@ -1881,6 +2024,7 @@ export default function ComercialPage() {
       if (productsRes.ok) setProducts(await productsRes.json())
       if (clientsRes.ok) setClients(await clientsRes.json())
       if (configRes.ok) setConfigCategories(await configRes.json())
+      if (partnersRes.ok) setPartners(await partnersRes.json())
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
     }
@@ -1903,6 +2047,7 @@ export default function ComercialPage() {
       productMode: (budget as any).productId ? 'catalog' : 'custom',
       clientMode: (budget as any).clientId ? 'registered' : 'quick',
       clientId: (budget as any).clientId || undefined,
+      clientPersonType: ((budget as any).clientPersonType === 'PESSOA_FISICA' ? 'PESSOA_FISICA' : 'PESSOA_JURIDICA') as ClientPersonType,
       clientCnpj: budget.clientCnpj || '',
       clientName: budget.clientName,
       clientPhone: budget.clientPhone || '',
@@ -1912,8 +2057,11 @@ export default function ComercialPage() {
       status: budget.status,
       ironCost: budget.ironCost,
       paintCost: budget.paintCost,
+      corteDobraCost: (budget as any).corteDobraCost || 0,
+      instalacaoCost: (budget as any).instalacaoCost || 0,
       profitMargin: budget.profitMargin,
       casualtyMargin: budget.casualtyMargin,
+      discountPercent: (budget as any).discountPercent || 0,
       entryPercent: budget.entryPercent,
       deliveryPercent: budget.deliveryPercent,
       taxRate: budget.taxRate,
@@ -2190,6 +2338,7 @@ export default function ComercialPage() {
       {/* Form Modal */}
       {showForm && (
         <BudgetFormPanel
+          partners={partners}
           form={form}
           setForm={setForm}
           allEmployees={employees}

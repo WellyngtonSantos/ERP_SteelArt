@@ -16,9 +16,12 @@ import {
   Users,
 } from 'lucide-react'
 
+type PersonType = 'PESSOA_FISICA' | 'PESSOA_JURIDICA'
+
 interface Client {
   id: string
   name: string
+  personType: PersonType
   cnpj: string | null
   phone: string | null
   email: string | null
@@ -32,6 +35,7 @@ interface Client {
 interface ClientForm {
   id?: string
   name: string
+  personType: PersonType
   cnpj: string
   phone: string
   email: string
@@ -41,6 +45,7 @@ interface ClientForm {
 
 const emptyForm = (): ClientForm => ({
   name: '',
+  personType: 'PESSOA_JURIDICA',
   cnpj: '',
   phone: '',
   email: '',
@@ -57,10 +62,24 @@ const formatCnpj = (value: string) => {
     .replace(/(\d{4})(\d)/, '$1-$2')
 }
 
-const formatCnpjDisplay = (cnpj: string | null) => {
-  if (!cnpj) return ''
-  const d = cnpj.replace(/\D/g, '')
-  if (d.length !== 14) return cnpj
+const formatCpf = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 11)
+  return digits
+    .replace(/^(\d{3})(\d)/, '$1.$2')
+    .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1-$2')
+}
+
+const formatDocument = (value: string, pt: PersonType) =>
+  pt === 'PESSOA_FISICA' ? formatCpf(value) : formatCnpj(value)
+
+const formatCnpjDisplay = (doc: string | null, pt?: PersonType) => {
+  if (!doc) return ''
+  const d = doc.replace(/\D/g, '')
+  if (pt === 'PESSOA_FISICA' && d.length === 11) {
+    return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`
+  }
+  if (d.length !== 14) return doc
   return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`
 }
 
@@ -133,7 +152,8 @@ export default function ClientesPage() {
     setForm({
       id: client.id,
       name: client.name,
-      cnpj: client.cnpj ? formatCnpjDisplay(client.cnpj) : '',
+      personType: client.personType || 'PESSOA_JURIDICA',
+      cnpj: client.cnpj ? formatCnpjDisplay(client.cnpj, client.personType) : '',
       phone: client.phone || '',
       email: client.email || '',
       address: client.address || '',
@@ -263,7 +283,7 @@ export default function ClientesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-300 font-mono">
-                      {formatCnpjDisplay(client.cnpj) || '-'}
+                      {formatCnpjDisplay(client.cnpj, client.personType) || '-'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-300">
                       {client.phone || '-'}
@@ -330,7 +350,7 @@ export default function ClientesPage() {
                     <h3 className="font-medium text-gray-200">{client.name}</h3>
                     {client.cnpj && (
                       <p className="text-xs text-gray-500 font-mono mt-0.5">
-                        {formatCnpjDisplay(client.cnpj)}
+                        {formatCnpjDisplay(client.cnpj, client.personType)}
                       </p>
                     )}
                   </div>
@@ -372,11 +392,32 @@ export default function ClientesPage() {
             </div>
 
             <div className="p-6 space-y-4">
-              {/* CNPJ Search */}
+              {/* Tipo de pessoa */}
+              <div>
+                <label className="label-field">Tipo de Cliente</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['PESSOA_JURIDICA', 'PESSOA_FISICA'] as PersonType[]).map((pt) => (
+                    <button
+                      key={pt}
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, personType: pt, cnpj: '' }))}
+                      className={`p-3 rounded-lg border-2 text-sm font-medium transition-colors ${
+                        form.personType === pt
+                          ? 'border-amarelo bg-amarelo/10 text-amarelo'
+                          : 'border-grafite-700 bg-grafite-800 text-gray-400 hover:border-grafite-600'
+                      }`}
+                    >
+                      {pt === 'PESSOA_JURIDICA' ? 'Pessoa Juridica (CNPJ)' : 'Pessoa Fisica (CPF)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Documento (CPF ou CNPJ) */}
               <div>
                 <label className="label-field flex items-center gap-1">
                   <Building2 className="w-3.5 h-3.5" />
-                  CNPJ (auto preenchimento)
+                  {form.personType === 'PESSOA_FISICA' ? 'CPF' : 'CNPJ (auto preenchimento)'}
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -386,26 +427,28 @@ export default function ClientesPage() {
                     className="input-field flex-1"
                     value={form.cnpj}
                     onChange={(e) => {
-                      setForm((prev) => ({ ...prev, cnpj: formatCnpj(e.target.value) }))
+                      setForm((prev) => ({ ...prev, cnpj: formatDocument(e.target.value, prev.personType) }))
                       setCnpjError('')
                       setCnpjSuccess('')
                     }}
-                    placeholder="00.000.000/0000-00"
-                    maxLength={18}
+                    placeholder={form.personType === 'PESSOA_FISICA' ? '000.000.000-00' : '00.000.000/0000-00'}
+                    maxLength={form.personType === 'PESSOA_FISICA' ? 14 : 18}
                   />
-                  <button
-                    type="button"
-                    onClick={handleCnpjSearch}
-                    disabled={cnpjLoading || form.cnpj.replace(/\D/g, '').length !== 14}
-                    className="px-4 py-2 bg-amarelo text-grafite-900 rounded-lg font-semibold text-sm hover:bg-amarelo/90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-                  >
-                    {cnpjLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Search className="w-4 h-4" />
-                    )}
-                    Buscar
-                  </button>
+                  {form.personType === 'PESSOA_JURIDICA' && (
+                    <button
+                      type="button"
+                      onClick={handleCnpjSearch}
+                      disabled={cnpjLoading || form.cnpj.replace(/\D/g, '').length !== 14}
+                      className="px-4 py-2 bg-amarelo text-grafite-900 rounded-lg font-semibold text-sm hover:bg-amarelo/90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                    >
+                      {cnpjLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Search className="w-4 h-4" />
+                      )}
+                      Buscar
+                    </button>
+                  )}
                 </div>
                 {cnpjError && <p className="text-red-400 text-xs mt-1">{cnpjError}</p>}
                 {cnpjSuccess && (

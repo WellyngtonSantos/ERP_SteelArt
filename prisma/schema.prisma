@@ -69,6 +69,8 @@ model Product {
   defaultMargin     Float    @default(20)
   tempoProducaoDias Float    @default(0) // Dias estimados de fabricacao interna
   tempoMontagemDias Float    @default(0) // Dias estimados de montagem externa
+  isFullProduct     Boolean  @default(false) // true = chale/produto completo (mostra configurador no orcamento)
+  basePrice         Float    @default(0) // Preco sugerido para orcamentos tipo VENDA
   images            String?  // comma-separated paths
   active            Boolean  @default(true)
   createdAt         DateTime @default(now())
@@ -92,17 +94,18 @@ model ProductConfiguratorDefault {
 }
 
 model Client {
-  id        String   @id @default(cuid())
-  name      String
-  cnpj      String?  @unique
-  phone     String?
-  email     String?
-  address   String?
-  notes     String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  budgets   Budget[]
+  id         String   @id @default(cuid())
+  name       String
+  personType String   @default("PESSOA_JURIDICA") // PESSOA_FISICA | PESSOA_JURIDICA
+  cnpj       String?  @unique // documento — CPF se PF, CNPJ se PJ
+  phone      String?
+  email      String?
+  address    String?
+  notes      String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  budgets    Budget[]
 }
 
 model Budget {
@@ -110,18 +113,22 @@ model Budget {
   clientId       String?
   client         Client?          @relation(fields: [clientId], references: [id])
   clientName     String
+  clientPersonType String         @default("PESSOA_JURIDICA") // PESSOA_FISICA | PESSOA_JURIDICA — snapshot
   clientCnpj     String?
   clientPhone    String?
   clientEmail    String?
   clientAddress  String?
   productId      String?
   product        Product?         @relation(fields: [productId], references: [id])
-  type           String           // PRODUTO, SERVICO
+  type           String           // PRODUTO (fabricacao), SERVICO, VENDA
   status         String           @default("RASCUNHO") // RASCUNHO, ENVIADO, APROVADO, REJEITADO
   ironCost       Float            @default(0)
   paintCost      Float            @default(0)
+  corteDobraCost Float            @default(0) // Corte e Dobra Metal
+  instalacaoCost Float            @default(0) // Instalacao Steel Art
   profitMargin   Float            @default(20) // %
   casualtyMargin Float            @default(5)  // %
+  discountPercent Float           @default(0)  // % desconto sobre preco final
   entryPercent   Float            @default(50) // % entrada
   deliveryPercent Float           @default(50) // % entrega
   totalCost      Float            @default(0)
@@ -164,6 +171,7 @@ model BudgetItem {
   budget      Budget    @relation(fields: [budgetId], references: [id], onDelete: Cascade)
   materialId  String?
   material    Material? @relation(fields: [materialId], references: [id])
+  kind        String    @default("MATERIAL") // MATERIAL | FRETE | OPCIONAL_PRODUTO
   description String
   quantity    Float
   unitPrice   Float
@@ -238,6 +246,18 @@ model FixedCost {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Socios e Caixa Empresa — recebem distribuicao do lucro liquido de cada orcamento aprovado
+model Partner {
+  id           String   @id @default(cuid())
+  name         String
+  kind         String   @default("PARTNER") // PARTNER (pessoa, gera pro-labore) | COMPANY_CASH (fica na empresa)
+  sharePercent Float    // % de participacao (soma 100 entre ativos)
+  order        Int      @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model TaxConfig {
