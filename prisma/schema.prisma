@@ -74,6 +74,21 @@ model Product {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   budgets           Budget[]
+  configuratorDefaults ProductConfiguratorDefault[]
+}
+
+// Opcoes do "Monte o seu" que ja vem marcadas quando um produto e escolhido no orcamento
+model ProductConfiguratorDefault {
+  id         String              @id @default(cuid())
+  productId  String
+  product    Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  optionId   String
+  option     ConfiguratorOption  @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  quantity   Float               @default(1)
+  order      Int                 @default(0)
+  createdAt  DateTime            @default(now())
+
+  @@unique([productId, optionId])
 }
 
 model Client {
@@ -277,6 +292,7 @@ model ConfiguratorOption {
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  productDefaults ProductConfiguratorDefault[]
 }
 
 // Snapshot das opcoes escolhidas em um orcamento (sem FK para nao quebrar ao excluir opcao)

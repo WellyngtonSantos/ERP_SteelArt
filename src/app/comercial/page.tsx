@@ -97,6 +97,19 @@ const PAYMENT_METHODS = [
   { value: 'OUTROS', label: 'Outros' },
 ]
 
+interface ProductConfigDefaultData {
+  optionId: string
+  quantity: number
+  order: number
+  option: {
+    id: string
+    name: string
+    unitPrice: number
+    tempoDias: number
+    category: { id: string; name: string }
+  }
+}
+
 interface ProductData {
   id: string
   name: string
@@ -108,6 +121,7 @@ interface ProductData {
   tempoProducaoDias: number
   tempoMontagemDias: number
   images?: string
+  configuratorDefaults?: ProductConfigDefaultData[]
 }
 
 interface ClientData {
@@ -421,6 +435,17 @@ function BudgetFormPanel({
     const productImages = product.images ? product.images.split('|||').filter(Boolean) : []
     const tempoTotal = (product.tempoProducaoDias || 0) + (product.tempoMontagemDias || 0)
 
+    // Pre-popula picks do configurador a partir do produto (vendedor pode alterar depois)
+    const productPicks: BudgetPickForm[] = (product.configuratorDefaults || []).map((d, idx) => ({
+      optionId: d.option.id,
+      optionName: d.option.name,
+      categoryName: d.option.category.name,
+      unitPrice: d.option.unitPrice,
+      tempoDias: d.option.tempoDias,
+      quantity: d.quantity,
+      order: d.order ?? idx,
+    }))
+
     setForm((prev) => ({
       ...prev,
       productId: product.id,
@@ -438,6 +463,8 @@ function BudgetFormPanel({
             unitPrice: m.unitPrice,
           }))
         : [{ description: '', quantity: 1, unitPrice: 0 }],
+      // So sobrescreve picks se o orcamento ainda nao foi salvo (form.id vazio) ou se nao havia picks
+      picks: prev.id ? prev.picks : productPicks,
     }))
   }, [products, setForm])
 

@@ -13,12 +13,54 @@ export async function GET() {
     const products = await prisma.product.findMany({
       where: { active: true },
       orderBy: { createdAt: 'desc' },
+      include: {
+        configuratorDefaults: {
+          orderBy: { order: 'asc' },
+          include: {
+            option: {
+              include: { category: true },
+            },
+          },
+        },
+      },
     })
     return NextResponse.json(products)
   } catch (error) {
     console.error('Error fetching products:', error)
     return NextResponse.json({ error: 'Erro ao buscar produtos' }, { status: 500 })
   }
+}
+
+// Parse e valida a lista de opcoes padrao do configurador vinda do form
+// Formato esperado: JSON array [{ optionId, quantity }]
+async function parseConfiguratorDefaults(raw: string | null | undefined): Promise<Array<{ optionId: string; quantity: number; order: number }>> {
+  if (!raw) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(parsed)) return []
+
+  const seen = new Set<string>()
+  const result: Array<{ optionId: string; quantity: number; order: number }> = []
+  for (let i = 0; i < parsed.length; i++) {
+    const item = parsed[i] as { optionId?: string; quantity?: number } | null
+    if (!item || typeof item.optionId !== 'string' || !item.optionId) continue
+    if (seen.has(item.optionId)) continue
+    seen.add(item.optionId)
+    const q = typeof item.quantity === 'number' && isFinite(item.quantity) && item.quantity > 0 ? item.quantity : 1
+    result.push({ optionId: item.optionId, quantity: q, order: i })
+  }
+  // Filtra IDs que nao existem no banco
+  if (result.length === 0) return []
+  const existing = await prisma.configuratorOption.findMany({
+    where: { id: { in: result.map((r) => r.optionId) } },
+    select: { id: true },
+  })
+  const validIds = new Set(existing.map((e) => e.id))
+  return result.filter((r) => validIds.has(r.optionId))
 }
 
 export async function POST(request: NextRequest) {
@@ -70,6 +112,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Total de imagens excede 25MB por produto' }, { status: 400 })
     }
 
+    const defaults = await parseConfiguratorDefaults(formData.get('configuratorDefaults') as string | null)
+
     const product = await prisma.product.create({
       data: {
         name,
@@ -81,6 +125,18 @@ export async function POST(request: NextRequest) {
         tempoProducaoDias,
         tempoMontagemDias,
         images: joinedImages,
+        configuratorDefaults: defaults.length > 0 ? {
+          create: defaults.map((d) => ({
+            optionId: d.optionId,
+            quantity: d.quantity,
+            order: d.order,
+          })),
+        } : undefined,
+      },
+      include: {
+        configuratorDefaults: {
+          include: { option: { include: { category: true } } },
+        },
       },
     })
 
@@ -151,19 +207,43 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Total de imagens excede 25MB por produto' }, { status: 400 })
     }
 
-    const product = await prisma.product.update({
-      where: { id },
-      data: {
-        name,
-        description: description || null,
-        materialsJson: materialsJson || '[]',
-        ironCost,
-        paintCost,
-        defaultMargin,
-        tempoProducaoDias,
-        tempoMontagemDias,
-        images: joinedImages,
-      },
+    const defaults = await parseConfiguratorDefaults(formData.get('configuratorDefaults') as string | null)
+
+    const product = await prisma.$transaction(async (tx) => {
+      const updated = await tx.product.update({
+        where: { id },
+        data: {
+          name,
+          description: description || null,
+          materialsJson: materialsJson || '[]',
+          ironCost,
+          paintCost,
+          defaultMargin,
+          tempoProducaoDias,
+          tempoMontagemDias,
+          images: joinedImages,
+        },
+      })
+      // Substitui o conjunto de defaults por completo (simples e idempotente)
+      await tx.productConfiguratorDefault.deleteMany({ where: { productId: id } })
+      if (defaults.length > 0) {
+        await tx.productConfiguratorDefault.createMany({
+          data: defaults.map((d) => ({
+            productId: id,
+            optionId: d.optionId,
+            quantity: d.quantity,
+            order: d.order,
+          })),
+        })
+      }
+      return tx.product.findUnique({
+        where: { id: updated.id },
+        include: {
+          configuratorDefaults: {
+            include: { option: { include: { category: true } } },
+          },
+        },
+      })
     })
 
     return NextResponse.json(product)

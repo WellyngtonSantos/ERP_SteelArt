@@ -20,6 +20,39 @@ interface MaterialItem {
   unitPrice: number
 }
 
+interface ConfiguratorOption {
+  id: string
+  categoryId: string
+  name: string
+  unitPrice: number
+  tempoDias: number
+  active: boolean
+  order: number
+}
+
+interface ConfiguratorCategory {
+  id: string
+  name: string
+  selectionType: 'SINGLE' | 'MULTIPLE'
+  order: number
+  active: boolean
+  options: ConfiguratorOption[]
+}
+
+interface ProductConfigDefault {
+  id?: string
+  optionId: string
+  quantity: number
+  order: number
+  option?: {
+    id: string
+    name: string
+    unitPrice: number
+    tempoDias: number
+    category: { id: string; name: string; selectionType: 'SINGLE' | 'MULTIPLE' }
+  }
+}
+
 interface Product {
   id: string
   name: string
@@ -32,6 +65,7 @@ interface Product {
   tempoMontagemDias: number
   images?: string
   createdAt: string
+  configuratorDefaults?: ProductConfigDefault[]
 }
 
 interface ProductForm {
@@ -46,6 +80,7 @@ interface ProductForm {
   tempoMontagemDias: number
   existingImages: string[]
   newImages: File[]
+  configDefaults: { optionId: string; quantity: number }[]
 }
 
 const emptyForm = (): ProductForm => ({
@@ -59,6 +94,7 @@ const emptyForm = (): ProductForm => ({
   tempoMontagemDias: 0,
   existingImages: [],
   newImages: [],
+  configDefaults: [],
 })
 
 export default function ProdutosPage() {
@@ -69,6 +105,18 @@ export default function ProdutosPage() {
   const [saving, setSaving] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [previewImages, setPreviewImages] = useState<string[]>([])
+  const [configCategories, setConfigCategories] = useState<ConfiguratorCategory[]>([])
+
+  const fetchConfigCategories = useCallback(async () => {
+    try {
+      const res = await fetch('/api/configurator/categories')
+      if (res.ok) setConfigCategories(await res.json())
+    } catch (err) {
+      console.error('Erro ao carregar configurador:', err)
+    }
+  }, [])
+
+  useEffect(() => { fetchConfigCategories() }, [fetchConfigCategories])
 
   const fetchProducts = useCallback(async () => {
     setLoading(true)
@@ -106,6 +154,10 @@ export default function ProdutosPage() {
       tempoMontagemDias: product.tempoMontagemDias || 0,
       existingImages,
       newImages: [],
+      configDefaults: (product.configuratorDefaults || []).map((d) => ({
+        optionId: d.optionId,
+        quantity: d.quantity,
+      })),
     })
     setPreviewImages(existingImages)
     setShowForm(true)
@@ -126,6 +178,7 @@ export default function ProdutosPage() {
     formData.append('tempoProducaoDias', String(form.tempoProducaoDias))
     formData.append('tempoMontagemDias', String(form.tempoMontagemDias))
     formData.append('existingImages', form.existingImages.join('|||'))
+    formData.append('configuratorDefaults', JSON.stringify(form.configDefaults))
 
     for (const file of form.newImages) {
       formData.append('images', file)
@@ -677,6 +730,98 @@ export default function ProdutosPage() {
                     <Plus className="w-4 h-4" /> Adicionar Material
                   </button>
                 </div>
+              </div>
+
+              {/* Configurador "Monte o seu" — opcoes padrao do produto */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-200 mb-2">Opcoes do &quot;Monte o seu&quot; (padrao deste produto)</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  Marque as opcoes que vem de fabrica neste produto. Ao criar um orcamento com ele, essas opcoes ja virao pre-selecionadas (o vendedor pode trocar).
+                </p>
+                {configCategories.filter((c) => c.active).length === 0 ? (
+                  <div className="bg-grafite-800 border border-grafite-700 rounded-lg p-4 text-sm text-gray-500">
+                    Nenhuma categoria cadastrada. Va em <a href="/configuracoes" className="text-amarelo hover:underline">Configuracoes {'>'} Configurador</a> pra cadastrar.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {configCategories.filter((c) => c.active).map((cat) => {
+                      const activeOpts = cat.options.filter((o) => o.active)
+                      if (activeOpts.length === 0) return null
+                      return (
+                        <div key={cat.id} className="bg-grafite-800 border border-grafite-700 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-semibold text-gray-200">{cat.name}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-grafite-700 text-gray-400">
+                              {cat.selectionType === 'SINGLE' ? 'escolha uma' : 'multipla'}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {activeOpts.map((opt) => {
+                              const picked = form.configDefaults.find((d) => d.optionId === opt.id)
+                              const isSingle = cat.selectionType === 'SINGLE'
+                              const toggle = () => {
+                                setForm((prev) => {
+                                  if (picked) {
+                                    return { ...prev, configDefaults: prev.configDefaults.filter((d) => d.optionId !== opt.id) }
+                                  }
+                                  // SINGLE: remove outros desta categoria
+                                  const catOptIds = new Set(activeOpts.map((o) => o.id))
+                                  const cleaned = isSingle
+                                    ? prev.configDefaults.filter((d) => !catOptIds.has(d.optionId))
+                                    : prev.configDefaults
+                                  return { ...prev, configDefaults: [...cleaned, { optionId: opt.id, quantity: 1 }] }
+                                })
+                              }
+                              return (
+                                <div
+                                  key={opt.id}
+                                  className={`flex items-center gap-2 p-2 rounded border transition-colors cursor-pointer ${
+                                    picked ? 'border-amarelo bg-amarelo/10' : 'border-grafite-700 hover:border-grafite-600'
+                                  }`}
+                                  onClick={toggle}
+                                >
+                                  <input
+                                    type={isSingle ? 'radio' : 'checkbox'}
+                                    checked={!!picked}
+                                    onChange={toggle}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="accent-amarelo"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm text-gray-200 truncate">{opt.name}</p>
+                                    <p className="text-[11px] text-gray-500">
+                                      {formatCurrency(opt.unitPrice)} · {opt.tempoDias}d
+                                    </p>
+                                  </div>
+                                  {picked && !isSingle && (
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      step="0.5"
+                                      value={picked.quantity}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => {
+                                        e.stopPropagation()
+                                        const q = parseFloat(e.target.value) || 1
+                                        setForm((prev) => ({
+                                          ...prev,
+                                          configDefaults: prev.configDefaults.map((d) =>
+                                            d.optionId === opt.id ? { ...d, quantity: q } : d
+                                          ),
+                                        }))
+                                      }}
+                                      className="w-14 text-xs bg-grafite-900 border border-grafite-600 rounded px-1 py-0.5 text-gray-200"
+                                    />
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Cost Summary */}
