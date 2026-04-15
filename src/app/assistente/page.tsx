@@ -125,22 +125,67 @@ export default function AssistentePage() {
     ])
   }
 
-  function handleFreeText(e: React.FormEvent) {
+  async function handleFreeText(e: React.FormEvent) {
     e.preventDefault()
     const text = input.trim()
     if (!text || loading) return
     setInput('')
+    const loadingId = nextId()
     setMessages((prev) => [
       ...prev,
       { id: nextId(), role: 'user', text },
-      {
-        id: nextId(),
-        role: 'assistant',
-        kind: 'text',
-        text:
-          'Por enquanto eu respondo apenas as perguntas rapidas listadas abaixo. Em breve poderei entender perguntas em texto livre.',
-      },
+      { id: loadingId, role: 'assistant', kind: 'loading' },
     ])
+    setLoading(true)
+
+    try {
+      const res = await fetch('/api/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === loadingId
+              ? { id: m.id, role: 'assistant', kind: 'text', text: data?.error || 'Nao foi possivel processar agora.' }
+              : m
+          )
+        )
+        return
+      }
+
+      // Backend pode responder texto livre (IA) ou um intent estruturado
+      if (data.kind === 'intent') {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === loadingId
+              ? { id: m.id, role: 'assistant', kind: 'intent', data: data as IntentResponse }
+              : m
+          )
+        )
+      } else {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === loadingId
+              ? { id: m.id, role: 'assistant', kind: 'text', text: data.text || 'Sem resposta.' }
+              : m
+          )
+        )
+      }
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === loadingId
+            ? { id: m.id, role: 'assistant', kind: 'text', text: 'Falha de conexao ao consultar o assistente.' }
+            : m
+        )
+      )
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
